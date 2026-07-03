@@ -118,23 +118,30 @@ export function CoinSourceEditor({
 
   const handleAddCoin = () => {
     if (!newCoin.trim()) return
-    const symbol = newCoin.toUpperCase().trim()
-
-    // For xyz dex assets (stocks, forex, commodities), use xyz: prefix without USDT
-    let formattedSymbol: string
-    if (isXyzDexAsset(symbol)) {
-      // Remove xyz: prefix (case-insensitive) and any USD suffixes
-      const base = symbol.replace(/^xyz:/i, '').replace(/USDT$|USD$|-USDC$/i, '')
-      formattedSymbol = `xyz:${base}`
-    } else {
-      formattedSymbol = symbol.endsWith('USDT') ? symbol : `${symbol}USDT`
-    }
+    const rawSymbols = newCoin.split(',').map(s => s.trim().toUpperCase()).filter(Boolean)
 
     const currentCoins = config.static_coins || []
-    if (!currentCoins.includes(formattedSymbol)) {
+    const updatedCoins = [...currentCoins]
+
+    for (const symbol of rawSymbols) {
+      // For xyz dex assets (stocks, forex, commodities), use xyz: prefix without USDT
+      let formattedSymbol: string
+      if (isXyzDexAsset(symbol)) {
+        const base = symbol.replace(/^xyz:/i, '').replace(/USDT$|USD$|-USDC$/i, '')
+        formattedSymbol = `xyz:${base}`
+      } else {
+        formattedSymbol = symbol.endsWith('USDT') ? symbol : `${symbol}USDT`
+      }
+
+      if (!updatedCoins.includes(formattedSymbol)) {
+        updatedCoins.push(formattedSymbol)
+      }
+    }
+
+    if (updatedCoins.length !== currentCoins.length) {
       onChange({
         ...config,
-        static_coins: [...currentCoins, formattedSymbol],
+        static_coins: updatedCoins,
       })
     }
     setNewCoin('')
@@ -149,22 +156,30 @@ export function CoinSourceEditor({
 
   const handleAddExcludedCoin = () => {
     if (!newExcludedCoin.trim()) return
-    const symbol = newExcludedCoin.toUpperCase().trim()
-
-    // For xyz dex assets, use xyz: prefix without USDT
-    let formattedSymbol: string
-    if (isXyzDexAsset(symbol)) {
-      const base = symbol.replace(/^xyz:/i, '').replace(/USDT$|USD$|-USDC$/i, '')
-      formattedSymbol = `xyz:${base}`
-    } else {
-      formattedSymbol = symbol.endsWith('USDT') ? symbol : `${symbol}USDT`
-    }
+    const rawSymbols = newExcludedCoin.split(',').map(s => s.trim().toUpperCase()).filter(Boolean)
 
     const currentExcluded = config.excluded_coins || []
-    if (!currentExcluded.includes(formattedSymbol)) {
+    const updatedExcluded = [...currentExcluded]
+
+    for (const symbol of rawSymbols) {
+      // For xyz dex assets, use xyz: prefix without USDT
+      let formattedSymbol: string
+      if (isXyzDexAsset(symbol)) {
+        const base = symbol.replace(/^xyz:/i, '').replace(/USDT$|USD$|-USDC$/i, '')
+        formattedSymbol = `xyz:${base}`
+      } else {
+        formattedSymbol = symbol.endsWith('USDT') ? symbol : `${symbol}USDT`
+      }
+
+      if (!updatedExcluded.includes(formattedSymbol)) {
+        updatedExcluded.push(formattedSymbol)
+      }
+    }
+
+    if (updatedExcluded.length !== currentExcluded.length) {
       onChange({
         ...config,
-        excluded_coins: [...currentExcluded, formattedSymbol],
+        excluded_coins: updatedExcluded,
       })
     }
     setNewExcludedCoin('')
