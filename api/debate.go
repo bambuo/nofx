@@ -136,7 +136,7 @@ func (h *DebateHandler) HandleCreateDebate(c *gin.Context) {
 	}
 
 	// Validate strategy exists
-	strategy, err := h.strategyStore.Get(userID, req.StrategyID)
+	strategy, err := h.strategyStore.Get(c.Request.Context(), userID, req.StrategyID)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "strategy not found"})
 		return

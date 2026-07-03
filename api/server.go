@@ -63,7 +63,10 @@ func NewServer(traderManager *manager.TraderManager, st *store.Store, cryptoServ
 	cryptoHandler := NewCryptoHandler(cryptoService)
 
 	// Create debate store and handler
-	debateStore := store.NewDebateStore(st.GormDB())
+	debateStore := store.NewDebateStore()
+	if ec := st.EntClient(); ec != nil {
+		debateStore.SetEntClient(ec)
+	}
 	if err := debateStore.InitSchema(); err != nil {
 		logger.Errorf("Failed to initialize debate schema: %v", err)
 	}
@@ -391,7 +394,7 @@ func (s *Server) getTraderFromQuery(c *gin.Context) (*manager.TraderManager, str
 		}
 
 		// Get user's trader list, prioritize returning user's own traders
-		userTraders, err := s.store.Trader().List(userID)
+		userTraders, err := s.store.Trader().List(c.Request.Context(), userID)
 		if err == nil && len(userTraders) > 0 {
 			traderID = userTraders[0].ID
 		} else {
@@ -703,7 +706,7 @@ func (s *Server) handleCreateTrader(c *gin.Context) {
 
 	// Save to database
 	logger.Infof("🔧 DEBUG: Preparing to call CreateTrader")
-	err = s.store.Trader().Create(traderRecord)
+	err = s.store.Trader().Create(c.Request.Context(), traderRecord)
 	if err != nil {
 		logger.Infof("❌ Failed to create trader: %v", err)
 		SafeInternalError(c, "Failed to create trader", err)
@@ -761,7 +764,7 @@ func (s *Server) handleUpdateTrader(c *gin.Context) {
 	}
 
 	// Check if trader exists and belongs to current user
-	traders, err := s.store.Trader().List(userID)
+	traders, err := s.store.Trader().List(c.Request.Context(), userID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get trader list"})
 		return
@@ -857,7 +860,7 @@ func (s *Server) handleUpdateTrader(c *gin.Context) {
 	// Update database
 	logger.Infof("🔄 Updating trader: ID=%s, Name=%s, AIModelID=%s, StrategyID=%s, ScanInterval=%d min",
 		traderRecord.ID, traderRecord.Name, traderRecord.AIModelID, traderRecord.StrategyID, scanIntervalMinutes)
-	err = s.store.Trader().Update(traderRecord)
+	err = s.store.Trader().Update(c.Request.Context(), traderRecord)
 	if err != nil {
 		SafeInternalError(c, "Failed to update trader", err)
 		return
@@ -900,7 +903,7 @@ func (s *Server) handleDeleteTrader(c *gin.Context) {
 	traderID := c.Param("id")
 
 	// Delete from database
-	err := s.store.Trader().Delete(userID, traderID)
+	err := s.store.Trader().Delete(c.Request.Context(), userID, traderID)
 	if err != nil {
 		SafeInternalError(c, "Failed to delete trader", err)
 		return
@@ -928,7 +931,7 @@ func (s *Server) handleStartTrader(c *gin.Context) {
 	traderID := c.Param("id")
 
 	// Verify trader belongs to current user
-	_, err := s.store.Trader().GetFullConfig(userID, traderID)
+	_, err := s.store.Trader().GetFullConfig(c.Request.Context(), userID, traderID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Trader does not exist or no access permission"})
 		return
@@ -958,7 +961,7 @@ func (s *Server) handleStartTrader(c *gin.Context) {
 	trader, err := s.traderManager.GetTrader(traderID)
 	if err != nil {
 		// Check detailed reason
-		fullCfg, _ := s.store.Trader().GetFullConfig(userID, traderID)
+		fullCfg, _ := s.store.Trader().GetFullConfig(c.Request.Context(), userID, traderID)
 		if fullCfg != nil && fullCfg.Trader != nil {
 			// Check strategy
 			if fullCfg.Strategy == nil {
@@ -1002,7 +1005,7 @@ func (s *Server) handleStartTrader(c *gin.Context) {
 	}()
 
 	// Update running status in database
-	err = s.store.Trader().UpdateStatus(userID, traderID, true)
+	err = s.store.Trader().UpdateStatus(c.Request.Context(), userID, traderID, true)
 	if err != nil {
 		logger.Infof("⚠️  Failed to update trader status: %v", err)
 	}
@@ -1017,7 +1020,7 @@ func (s *Server) handleStopTrader(c *gin.Context) {
 	traderID := c.Param("id")
 
 	// Verify trader belongs to current user
-	_, err := s.store.Trader().GetFullConfig(userID, traderID)
+	_, err := s.store.Trader().GetFullConfig(c.Request.Context(), userID, traderID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Trader does not exist or no access permission"})
 		return
@@ -1040,7 +1043,7 @@ func (s *Server) handleStopTrader(c *gin.Context) {
 	trader.Stop()
 
 	// Update running status in database
-	err = s.store.Trader().UpdateStatus(userID, traderID, false)
+	err = s.store.Trader().UpdateStatus(c.Request.Context(), userID, traderID, false)
 	if err != nil {
 		logger.Infof("⚠️  Failed to update trader status: %v", err)
 	}
@@ -1065,7 +1068,7 @@ func (s *Server) handleUpdateTraderPrompt(c *gin.Context) {
 	}
 
 	// Update database
-	err := s.store.Trader().UpdateCustomPrompt(userID, traderID, req.CustomPrompt, req.OverrideBasePrompt)
+	err := s.store.Trader().UpdateCustomPrompt(c.Request.Context(), userID, traderID, req.CustomPrompt, req.OverrideBasePrompt)
 	if err != nil {
 		SafeInternalError(c, "Failed to update custom prompt", err)
 		return
@@ -1097,7 +1100,7 @@ func (s *Server) handleToggleCompetition(c *gin.Context) {
 	}
 
 	// Update database
-	err := s.store.Trader().UpdateShowInCompetition(userID, traderID, req.ShowInCompetition)
+	err := s.store.Trader().UpdateShowInCompetition(c.Request.Context(), userID, traderID, req.ShowInCompetition)
 	if err != nil {
 		SafeInternalError(c, "Update competition visibility", err)
 		return
@@ -1141,7 +1144,7 @@ func (s *Server) handleSyncBalance(c *gin.Context) {
 	logger.Infof("🔄 User %s requested balance sync for trader %s", userID, traderID)
 
 	// Get trader configuration from database (including exchange info)
-	fullConfig, err := s.store.Trader().GetFullConfig(userID, traderID)
+	fullConfig, err := s.store.Trader().GetFullConfig(c.Request.Context(), userID, traderID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Trader does not exist"})
 		return
@@ -1263,7 +1266,7 @@ func (s *Server) handleSyncBalance(c *gin.Context) {
 		actualBalance, oldBalance, changePercent)
 
 	// Update initial_balance in database
-	err = s.store.Trader().UpdateInitialBalance(userID, traderID, actualBalance)
+	err = s.store.Trader().UpdateInitialBalance(c.Request.Context(), userID, traderID, actualBalance)
 	if err != nil {
 		logger.Infof("❌ Failed to update initial_balance: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update balance"})
@@ -1305,7 +1308,7 @@ func (s *Server) handleClosePosition(c *gin.Context) {
 	logger.Infof("🔻 User %s requested position close: trader=%s, symbol=%s, side=%s", userID, traderID, req.Symbol, req.Side)
 
 	// Get trader configuration from database (including exchange info)
-	fullConfig, err := s.store.Trader().GetFullConfig(userID, traderID)
+	fullConfig, err := s.store.Trader().GetFullConfig(c.Request.Context(), userID, traderID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Trader does not exist"})
 		return
@@ -1768,7 +1771,7 @@ func (s *Server) handleUpdateModelConfigs(c *gin.Context) {
 	tradersToReload := make(map[string]bool)
 	for modelID, modelData := range req.Models {
 		// Find traders using this AI model BEFORE updating
-		traders, _ := s.store.Trader().ListByAIModelID(userID, modelID)
+		traders, _ := s.store.Trader().ListByAIModelID(c.Request.Context(), userID, modelID)
 		for _, t := range traders {
 			tradersToReload[t.ID] = true
 		}
@@ -1901,7 +1904,7 @@ func (s *Server) handleUpdateExchangeConfigs(c *gin.Context) {
 	tradersToReload := make(map[string]bool)
 	for exchangeID, exchangeData := range req.Exchanges {
 		// Find traders using this exchange BEFORE updating
-		traders, _ := s.store.Trader().ListByExchangeID(userID, exchangeID)
+		traders, _ := s.store.Trader().ListByExchangeID(c.Request.Context(), userID, exchangeID)
 		for _, t := range traders {
 			tradersToReload[t.ID] = true
 		}
@@ -2041,7 +2044,7 @@ func (s *Server) handleDeleteExchange(c *gin.Context) {
 	}
 
 	// Check if any traders are using this exchange
-	traders, err := s.store.Trader().List(userID)
+	traders, err := s.store.Trader().List(c.Request.Context(), userID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check traders"})
 		return
@@ -2073,7 +2076,7 @@ func (s *Server) handleDeleteExchange(c *gin.Context) {
 // handleTraderList Trader list
 func (s *Server) handleTraderList(c *gin.Context) {
 	userID := c.GetString("user_id")
-	traders, err := s.store.Trader().List(userID)
+	traders, err := s.store.Trader().List(c.Request.Context(), userID)
 	if err != nil {
 		SafeInternalError(c, "Failed to get trader list", err)
 		return
@@ -2093,7 +2096,7 @@ func (s *Server) handleTraderList(c *gin.Context) {
 		// Get strategy name if strategy_id is set
 		var strategyName string
 		if trader.StrategyID != "" {
-			if strategy, err := s.store.Strategy().Get(userID, trader.StrategyID); err == nil {
+			if strategy, err := s.store.Strategy().Get(c.Request.Context(), userID, trader.StrategyID); err == nil {
 				strategyName = strategy.Name
 			}
 		}
@@ -2126,7 +2129,7 @@ func (s *Server) handleGetTraderConfig(c *gin.Context) {
 		return
 	}
 
-	fullCfg, err := s.store.Trader().GetFullConfig(userID, traderID)
+	fullCfg, err := s.store.Trader().GetFullConfig(c.Request.Context(), userID, traderID)
 	if err != nil {
 		SafeNotFound(c, "Trader config")
 		return
@@ -3601,7 +3604,7 @@ func (s *Server) getEquityHistoryForTraders(traderIDs []string, hours int) map[s
 			continue
 		}
 		// Get trader's initial balance from database (use GetByID which doesn't require userID)
-		trader, err := s.store.Trader().GetByID(traderID)
+		trader, err := s.store.Trader().GetByID(context.Background(), traderID)
 		if err == nil && trader != nil && trader.InitialBalance > 0 {
 			initialBalances[traderID] = trader.InitialBalance
 		}

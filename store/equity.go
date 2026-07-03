@@ -1,181 +1,168 @@
 package store
 
 import (
-	"fmt"
+	"context"
 	"time"
 
-	"gorm.io/gorm"
+	"nofx/ent"
+	entequity "nofx/ent/equitysnapshot"
 )
 
 // EquityStore account equity storage (for plotting return curves)
 type EquityStore struct {
-	db *gorm.DB
+	ec *ent.Client
 }
 
 // EquitySnapshot equity snapshot
 type EquitySnapshot struct {
-	ID            int64     `gorm:"primaryKey;autoIncrement" json:"id"`
-	TraderID      string    `gorm:"column:trader_id;not null;index:idx_equity_trader_time" json:"trader_id"`
-	Timestamp     time.Time `gorm:"not null;index:idx_equity_trader_time,sort:desc;index:idx_equity_timestamp,sort:desc" json:"timestamp"`
-	TotalEquity   float64   `gorm:"column:total_equity;not null;default:0" json:"total_equity"`
-	Balance       float64   `gorm:"not null;default:0" json:"balance"`
-	UnrealizedPnL float64   `gorm:"column:unrealized_pnl;not null;default:0" json:"unrealized_pnl"`
-	PositionCount int       `gorm:"column:position_count;default:0" json:"position_count"`
-	MarginUsedPct float64   `gorm:"column:margin_used_pct;default:0" json:"margin_used_pct"`
+	ID            int64     `json:"id"`
+	TraderID      string    `json:"trader_id"`
+	Timestamp     time.Time `json:"timestamp"`
+	TotalEquity   float64   `json:"total_equity"`
+	Balance       float64   `json:"balance"`
+	UnrealizedPnL float64   `json:"unrealized_pnl"`
+	PositionCount int       `json:"position_count"`
+	MarginUsedPct float64   `json:"margin_used_pct"`
 	CreatedAt     time.Time `json:"created_at"`
 }
 
-func (EquitySnapshot) TableName() string { return "trader_equity_snapshots" }
-
 // NewEquityStore creates a new EquityStore
-func NewEquityStore(db *gorm.DB) *EquityStore {
-	return &EquityStore{db: db}
+func NewEquityStore() *EquityStore {
+	return &EquityStore{}
 }
 
 // initTables initializes equity tables
 func (s *EquityStore) initTables() error {
-	// For PostgreSQL with existing table, skip AutoMigrate
-	if s.db.Dialector.Name() == "postgres" {
-		var tableExists int64
-		s.db.Raw(`SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'trader_equity_snapshots'`).Scan(&tableExists)
-		if tableExists > 0 {
-			return nil
-		}
+	return nil
+}
+
+// fromEntEquitySnapshot converts ent.EquitySnapshot to store.EquitySnapshot
+func fromEntEquitySnapshot(es *ent.EquitySnapshot) *EquitySnapshot {
+	if es == nil {
+		return nil
 	}
-	return s.db.AutoMigrate(&EquitySnapshot{})
+	return &EquitySnapshot{
+		ID:            es.ID,
+		TraderID:      es.TraderID,
+		Timestamp:     es.Timestamp,
+		TotalEquity:   es.TotalEquity,
+		Balance:       es.Balance,
+		UnrealizedPnL: es.UnrealizedPnl,
+		PositionCount: es.PositionCount,
+		MarginUsedPct: es.MarginUsedPct,
+		CreatedAt:     es.CreatedAt,
+	}
 }
 
 // Save saves equity snapshot
 func (s *EquityStore) Save(snapshot *EquitySnapshot) error {
+	ctx := context.Background()
 	if snapshot.Timestamp.IsZero() {
 		snapshot.Timestamp = time.Now().UTC()
 	} else {
 		snapshot.Timestamp = snapshot.Timestamp.UTC()
 	}
-
-	// Omit ID to let PostgreSQL sequence auto-generate it
-	// Without this, GORM inserts ID=0 which causes duplicate key errors
-	if err := s.db.Omit("ID").Create(snapshot).Error; err != nil {
-		return fmt.Errorf("failed to save equity snapshot: %w", err)
+	_, err := s.ec.EquitySnapshot.Create().
+		SetTraderID(snapshot.TraderID).
+		SetTimestamp(snapshot.Timestamp).
+		SetTotalEquity(snapshot.TotalEquity).
+		SetBalance(snapshot.Balance).
+		SetUnrealizedPnl(snapshot.UnrealizedPnL).
+		SetPositionCount(snapshot.PositionCount).
+		SetMarginUsedPct(snapshot.MarginUsedPct).
+		Save(ctx)
+	if err != nil {
+		return err
 	}
 	return nil
 }
 
 // GetLatest gets the latest N equity records for specified trader (sorted in ascending chronological order: old to new)
 func (s *EquityStore) GetLatest(traderID string, limit int) ([]*EquitySnapshot, error) {
-	var snapshots []*EquitySnapshot
-	err := s.db.Where("trader_id = ?", traderID).
-		Order("timestamp DESC").
+	ctx := context.Background()
+	snapshots, err := s.ec.EquitySnapshot.Query().
+		Where(entequity.TraderID(traderID)).
+		Order(ent.Desc(entequity.FieldTimestamp)).
 		Limit(limit).
-		Find(&snapshots).Error
+		All(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query equity records: %w", err)
+		return nil, err
 	}
-
-	// Reverse the array to sort time from old to new (suitable for plotting curves)
-	for i, j := 0, len(snapshots)-1; i < j; i, j = i+1, j-1 {
-		snapshots[i], snapshots[j] = snapshots[j], snapshots[i]
+	// Reverse to sort from old to new (suitable for plotting curves)
+	result := make([]*EquitySnapshot, len(snapshots))
+	for i, s := range snapshots {
+		result[len(snapshots)-1-i] = fromEntEquitySnapshot(s)
 	}
-
-	return snapshots, nil
+	return result, nil
 }
 
 // GetByTimeRange gets equity records within specified time range
 func (s *EquityStore) GetByTimeRange(traderID string, start, end time.Time) ([]*EquitySnapshot, error) {
-	var snapshots []*EquitySnapshot
-	err := s.db.Where("trader_id = ? AND timestamp >= ? AND timestamp <= ?", traderID, start, end).
-		Order("timestamp ASC").
-		Find(&snapshots).Error
+	ctx := context.Background()
+	snapshots, err := s.ec.EquitySnapshot.Query().
+		Where(
+			entequity.TraderID(traderID),
+			entequity.TimestampGTE(start),
+			entequity.TimestampLTE(end),
+		).
+		Order(ent.Asc(entequity.FieldTimestamp)).
+		All(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query equity records: %w", err)
+		return nil, err
 	}
-	return snapshots, nil
+	result := make([]*EquitySnapshot, len(snapshots))
+	for i, s := range snapshots {
+		result[i] = fromEntEquitySnapshot(s)
+	}
+	return result, nil
 }
 
 // GetAllTradersLatest gets latest equity for all traders (for leaderboards)
 func (s *EquityStore) GetAllTradersLatest() (map[string]*EquitySnapshot, error) {
-	// Use raw SQL for this complex query with subquery
-	var snapshots []*EquitySnapshot
-	err := s.db.Raw(`
-		SELECT e.id, e.trader_id, e.timestamp, e.total_equity, e.balance,
-		       e.unrealized_pnl, e.position_count, e.margin_used_pct, e.created_at
-		FROM trader_equity_snapshots e
-		INNER JOIN (
-			SELECT trader_id, MAX(timestamp) as max_ts
-			FROM trader_equity_snapshots
-			GROUP BY trader_id
-		) latest ON e.trader_id = latest.trader_id AND e.timestamp = latest.max_ts
-	`).Scan(&snapshots).Error
+	ctx := context.Background()
+	snapshots, err := s.ec.EquitySnapshot.Query().
+		Order(ent.Desc(entequity.FieldTimestamp)).
+		All(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query latest equity: %w", err)
+		return nil, err
 	}
 
+	// Deduplicate by TraderID, keeping only the latest (first after DESC order)
+	seen := make(map[string]bool)
 	result := make(map[string]*EquitySnapshot)
 	for _, snap := range snapshots {
-		result[snap.TraderID] = snap
+		if !seen[snap.TraderID] {
+			seen[snap.TraderID] = true
+			result[snap.TraderID] = fromEntEquitySnapshot(snap)
+		}
 	}
 	return result, nil
 }
 
 // CleanOldRecords cleans old records from N days ago
 func (s *EquityStore) CleanOldRecords(traderID string, days int) (int64, error) {
+	ctx := context.Background()
 	cutoffTime := time.Now().AddDate(0, 0, -days)
-
-	result := s.db.Where("trader_id = ? AND timestamp < ?", traderID, cutoffTime).
-		Delete(&EquitySnapshot{})
-	if result.Error != nil {
-		return 0, fmt.Errorf("failed to clean old records: %w", result.Error)
+	n, err := s.ec.EquitySnapshot.Delete().
+		Where(entequity.TraderID(traderID), entequity.TimestampLT(cutoffTime)).
+		Exec(ctx)
+	if err != nil {
+		return 0, err
 	}
-	return result.RowsAffected, nil
+	return int64(n), nil
 }
 
 // GetCount gets record count for specified trader
 func (s *EquityStore) GetCount(traderID string) (int, error) {
-	var count int64
-	err := s.db.Model(&EquitySnapshot{}).Where("trader_id = ?", traderID).Count(&count).Error
-	return int(count), err
+	ctx := context.Background()
+	count, err := s.ec.EquitySnapshot.Query().
+		Where(entequity.TraderID(traderID)).
+		Count(ctx)
+	return count, err
 }
 
 // MigrateFromDecision migrates data from old decision_account_snapshots table
+// Migration is no longer needed as ent manages the schema
 func (s *EquityStore) MigrateFromDecision() (int64, error) {
-	// Check if migration is needed (whether new table is empty)
-	var count int64
-	s.db.Model(&EquitySnapshot{}).Count(&count)
-	if count > 0 {
-		return 0, nil // Already has data, skip migration
-	}
-
-	// Check if old table exists (SQLite specific check, but works for migration)
-	var tableName string
-	err := s.db.Raw(`
-		SELECT name FROM sqlite_master
-		WHERE type='table' AND name='decision_account_snapshots'
-	`).Scan(&tableName).Error
-	if err != nil || tableName == "" {
-		return 0, nil // Old table doesn't exist, skip
-	}
-
-	// Migrate data: join query from decision_records + decision_account_snapshots
-	result := s.db.Exec(`
-		INSERT INTO trader_equity_snapshots (
-			trader_id, timestamp, total_equity, balance,
-			unrealized_pnl, position_count, margin_used_pct
-		)
-		SELECT
-			dr.trader_id,
-			dr.timestamp,
-			das.total_balance,
-			das.available_balance,
-			das.total_unrealized_profit,
-			das.position_count,
-			das.margin_used_pct
-		FROM decision_records dr
-		JOIN decision_account_snapshots das ON dr.id = das.decision_id
-		ORDER BY dr.timestamp ASC
-	`)
-	if result.Error != nil {
-		return 0, fmt.Errorf("failed to migrate data: %w", result.Error)
-	}
-
-	return result.RowsAffected, nil
+	return 0, nil
 }

@@ -31,7 +31,7 @@ func validateStrategyConfig(config *store.StrategyConfig) []string {
 
 // handlePublicStrategies Get public strategies for strategy market (no auth required)
 func (s *Server) handlePublicStrategies(c *gin.Context) {
-	strategies, err := s.store.Strategy().ListPublic()
+	strategies, err := s.store.Strategy().ListPublic(c.Request.Context())
 	if err != nil {
 		SafeInternalError(c, "Failed to get public strategies", err)
 		return
@@ -74,7 +74,7 @@ func (s *Server) handleGetStrategies(c *gin.Context) {
 		return
 	}
 
-	strategies, err := s.store.Strategy().List(userID)
+	strategies, err := s.store.Strategy().List(c.Request.Context(), userID)
 	if err != nil {
 		SafeInternalError(c, "Failed to get strategy list", err)
 		return
@@ -115,7 +115,7 @@ func (s *Server) handleGetStrategy(c *gin.Context) {
 		return
 	}
 
-	strategy, err := s.store.Strategy().Get(userID, strategyID)
+	strategy, err := s.store.Strategy().Get(c.Request.Context(), userID, strategyID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Strategy not found"})
 		return
@@ -172,7 +172,7 @@ func (s *Server) handleCreateStrategy(c *gin.Context) {
 		Config:      string(configJSON),
 	}
 
-	if err := s.store.Strategy().Create(strategy); err != nil {
+	if err := s.store.Strategy().Create(c.Request.Context(), strategy); err != nil {
 		SafeInternalError(c, "Failed to create strategy", err)
 		return
 	}
@@ -202,7 +202,7 @@ func (s *Server) handleUpdateStrategy(c *gin.Context) {
 	}
 
 	// Check if it's a system default strategy
-	existing, err := s.store.Strategy().Get(userID, strategyID)
+	existing, err := s.store.Strategy().Get(c.Request.Context(), userID, strategyID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Strategy not found"})
 		return
@@ -242,7 +242,7 @@ func (s *Server) handleUpdateStrategy(c *gin.Context) {
 		ConfigVisible: req.ConfigVisible,
 	}
 
-	if err := s.store.Strategy().Update(strategy); err != nil {
+	if err := s.store.Strategy().Update(c.Request.Context(), strategy); err != nil {
 		SafeInternalError(c, "Failed to update strategy", err)
 		return
 	}
@@ -268,7 +268,7 @@ func (s *Server) handleDeleteStrategy(c *gin.Context) {
 		return
 	}
 
-	if err := s.store.Strategy().Delete(userID, strategyID); err != nil {
+	if err := s.store.Strategy().Delete(c.Request.Context(), userID, strategyID); err != nil {
 		SafeInternalError(c, "Failed to delete strategy", err)
 		return
 	}
@@ -286,7 +286,7 @@ func (s *Server) handleActivateStrategy(c *gin.Context) {
 		return
 	}
 
-	if err := s.store.Strategy().SetActive(userID, strategyID); err != nil {
+	if err := s.store.Strategy().SetActive(c.Request.Context(), userID, strategyID); err != nil {
 		SafeInternalError(c, "Failed to activate strategy", err)
 		return
 	}
@@ -314,7 +314,7 @@ func (s *Server) handleDuplicateStrategy(c *gin.Context) {
 	}
 
 	newID := uuid.New().String()
-	if err := s.store.Strategy().Duplicate(userID, sourceID, newID, req.Name); err != nil {
+	if err := s.store.Strategy().Duplicate(c.Request.Context(), userID, sourceID, newID, req.Name); err != nil {
 		SafeInternalError(c, "Failed to duplicate strategy", err)
 		return
 	}
@@ -334,7 +334,7 @@ func (s *Server) handleGetActiveStrategy(c *gin.Context) {
 		return
 	}
 
-	strategy, err := s.store.Strategy().GetActive(userID)
+	strategy, err := s.store.Strategy().GetActive(c.Request.Context(), userID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "No active strategy"})
 		return

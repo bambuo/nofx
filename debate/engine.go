@@ -1,6 +1,7 @@
 package debate
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"regexp"
@@ -132,7 +133,7 @@ func (e *DebateEngine) StartDebate(sessionID string) error {
 	}
 
 	// Get strategy config
-	strategy, err := e.strategyStore.Get(session.UserID, session.StrategyID)
+	strategy, err := e.strategyStore.Get(context.Background(), session.UserID, session.StrategyID)
 	if err != nil {
 		return fmt.Errorf("failed to get strategy: %w", err)
 	}

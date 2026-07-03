@@ -1,99 +1,100 @@
 package store
 
 import (
-	"fmt"
+	"context"
 	"time"
 
-	"gorm.io/gorm"
+	"nofx/ent"
+	entgridconfig "nofx/ent/gridconfig"
+	entgridevent "nofx/ent/gridevent"
+	entgridinstance "nofx/ent/gridinstance"
+	entgridlevel "nofx/ent/gridlevel"
+	entregime "nofx/ent/gridregimeassessment"
 )
 
 // ==================== Grid Store Models ====================
 // These models mirror the grid package types but are defined here
 // to avoid import cycles between store and grid packages.
 
-// GridConfigModel GORM model for grid_configs table
+// GridConfigModel model for grid_configs table
 type GridConfigModel struct {
-	ID        string    `json:"id" gorm:"primaryKey"`
-	UserID    string    `json:"user_id" gorm:"index"`
-	TraderID  string    `json:"trader_id" gorm:"index"`
-	Symbol    string    `json:"symbol" gorm:"not null"`
-	CreatedAt time.Time `json:"created_at" gorm:"autoCreateTime"`
-	UpdatedAt time.Time `json:"updated_at" gorm:"autoUpdateTime"`
+	ID        string    `json:"id"`
+	UserID    string    `json:"user_id"`
+	TraderID  string    `json:"trader_id"`
+	Symbol    string    `json:"symbol"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 
-	GridCount       int     `json:"grid_count" gorm:"default:10"`
-	TotalInvestment float64 `json:"total_investment" gorm:"not null"`
-	Leverage        int     `json:"leverage" gorm:"default:5"`
+	GridCount       int     `json:"grid_count"`
+	TotalInvestment float64 `json:"total_investment"`
+	Leverage        int     `json:"leverage"`
 	UpperPrice      float64 `json:"upper_price"`
 	LowerPrice      float64 `json:"lower_price"`
-	UseATRBounds    bool    `json:"use_atr_bounds" gorm:"default:true"`
-	ATRMultiplier   float64 `json:"atr_multiplier" gorm:"default:2.0"`
-	Distribution    string  `json:"distribution" gorm:"default:gaussian"`
+	UseATRBounds    bool    `json:"use_atr_bounds"`
+	ATRMultiplier   float64 `json:"atr_multiplier"`
+	Distribution    string  `json:"distribution"`
 
-	MaxDrawdownPct     float64 `json:"max_drawdown_pct" gorm:"default:15.0"`
-	StopLossPct        float64 `json:"stop_loss_pct" gorm:"default:5.0"`
-	DailyLossLimitPct  float64 `json:"daily_loss_limit_pct" gorm:"default:10"`
-	MaxPositionSizePct float64 `json:"max_position_size_pct" gorm:"default:30"`
+	MaxDrawdownPct     float64 `json:"max_drawdown_pct"`
+	StopLossPct        float64 `json:"stop_loss_pct"`
+	DailyLossLimitPct  float64 `json:"daily_loss_limit_pct"`
+	MaxPositionSizePct float64 `json:"max_position_size_pct"`
 
-	RegimeCheckInterval  int  `json:"regime_check_interval" gorm:"default:30"`
-	AutoPauseOnTrend     bool `json:"auto_pause_on_trend" gorm:"default:true"`
-	MinRangingScore      int  `json:"min_ranging_score" gorm:"default:60"`
-	TrendResumeThreshold int  `json:"trend_resume_threshold" gorm:"default:70"`
+	RegimeCheckInterval  int  `json:"regime_check_interval"`
+	AutoPauseOnTrend     bool `json:"auto_pause_on_trend"`
+	MinRangingScore      int  `json:"min_ranging_score"`
+	TrendResumeThreshold int  `json:"trend_resume_threshold"`
 
 	// Box indicator periods (1h candles)
-	ShortBoxPeriod int `json:"short_box_period" gorm:"default:72"`  // 3 days
-	MidBoxPeriod   int `json:"mid_box_period" gorm:"default:240"`   // 10 days
-	LongBoxPeriod  int `json:"long_box_period" gorm:"default:500"`  // 21 days
+	ShortBoxPeriod int `json:"short_box_period"`
+	MidBoxPeriod   int `json:"mid_box_period"`
+	LongBoxPeriod  int `json:"long_box_period"`
 
 	// Effective leverage limits by regime level
-	NarrowRegimeLeverage   int `json:"narrow_regime_leverage" gorm:"default:2"`
-	StandardRegimeLeverage int `json:"standard_regime_leverage" gorm:"default:4"`
-	WideRegimeLeverage     int `json:"wide_regime_leverage" gorm:"default:3"`
-	VolatileRegimeLeverage int `json:"volatile_regime_leverage" gorm:"default:2"`
+	NarrowRegimeLeverage   int `json:"narrow_regime_leverage"`
+	StandardRegimeLeverage int `json:"standard_regime_leverage"`
+	WideRegimeLeverage     int `json:"wide_regime_leverage"`
+	VolatileRegimeLeverage int `json:"volatile_regime_leverage"`
 
 	// Position limits by regime level (percentage of total investment)
-	NarrowRegimePositionPct   float64 `json:"narrow_regime_position_pct" gorm:"default:40"`
-	StandardRegimePositionPct float64 `json:"standard_regime_position_pct" gorm:"default:70"`
-	WideRegimePositionPct     float64 `json:"wide_regime_position_pct" gorm:"default:60"`
-	VolatileRegimePositionPct float64 `json:"volatile_regime_position_pct" gorm:"default:40"`
+	NarrowRegimePositionPct   float64 `json:"narrow_regime_position_pct"`
+	StandardRegimePositionPct float64 `json:"standard_regime_position_pct"`
+	WideRegimePositionPct     float64 `json:"wide_regime_position_pct"`
+	VolatileRegimePositionPct float64 `json:"volatile_regime_position_pct"`
 
-	OrderRefreshSec  int     `json:"order_refresh_sec" gorm:"default:300"`
-	UseMakerOnly     bool    `json:"use_maker_only" gorm:"default:true"`
-	SlippageTolerPct float64 `json:"slippage_toler_pct" gorm:"default:0.1"`
+	OrderRefreshSec  int     `json:"order_refresh_sec"`
+	UseMakerOnly     bool    `json:"use_maker_only"`
+	SlippageTolerPct float64 `json:"slippage_toler_pct"`
 
-	AIProvider string `json:"ai_provider" gorm:"default:deepseek"`
-	AIModel    string `json:"ai_model" gorm:"default:deepseek-chat"`
-	IsActive   bool   `json:"is_active" gorm:"default:false"`
+	AIProvider string `json:"ai_provider"`
+	AIModel    string `json:"ai_model"`
+	IsActive   bool   `json:"is_active"`
 
 	// Direction adjustment settings
-	EnableDirectionAdjust bool    `json:"enable_direction_adjust" gorm:"default:false"`
-	DirectionBiasRatio    float64 `json:"direction_bias_ratio" gorm:"default:0.7"`
+	EnableDirectionAdjust bool    `json:"enable_direction_adjust"`
+	DirectionBiasRatio    float64 `json:"direction_bias_ratio"`
 }
 
-func (GridConfigModel) TableName() string {
-	return "grid_configs"
-}
-
-// GridInstanceModel GORM model for grid_instances table
+// GridInstanceModel model for grid_instances table
 type GridInstanceModel struct {
-	ID        string     `json:"id" gorm:"primaryKey"`
-	ConfigID  string     `json:"config_id" gorm:"index;not null"`
-	Symbol    string     `json:"symbol" gorm:"not null"`
-	State     string     `json:"state" gorm:"not null"`
+	ID        string     `json:"id"`
+	ConfigID  string     `json:"config_id"`
+	Symbol    string     `json:"symbol"`
+	State     string     `json:"state"`
 	StartedAt time.Time  `json:"started_at"`
 	StoppedAt *time.Time `json:"stopped_at,omitempty"`
-	UpdatedAt time.Time  `json:"updated_at" gorm:"autoUpdateTime"`
+	UpdatedAt time.Time  `json:"updated_at"`
 
-	CurrentUpperPrice   float64 `json:"current_upper_price"`
-	CurrentLowerPrice   float64 `json:"current_lower_price"`
-	CurrentGridSpacing  float64 `json:"current_grid_spacing"`
-	ActiveLevelCount    int     `json:"active_level_count"`
-	CurrentRegime       string  `json:"current_regime"`
-	RegimeScore         int     `json:"regime_score"`
+	CurrentUpperPrice   float64   `json:"current_upper_price"`
+	CurrentLowerPrice   float64   `json:"current_lower_price"`
+	CurrentGridSpacing  float64   `json:"current_grid_spacing"`
+	ActiveLevelCount    int       `json:"active_level_count"`
+	CurrentRegime       string    `json:"current_regime"`
+	RegimeScore         int       `json:"regime_score"`
 	LastRegimeCheck     time.Time `json:"last_regime_check"`
-	ConsecutiveTrending int     `json:"consecutive_trending"`
+	ConsecutiveTrending int       `json:"consecutive_trending"`
 
 	// Current regime level (narrow/standard/wide/volatile/trending)
-	CurrentRegimeLevel string `json:"current_regime_level" gorm:"default:standard"`
+	CurrentRegimeLevel string `json:"current_regime_level"`
 
 	// Box state
 	ShortBoxUpper float64 `json:"short_box_upper"`
@@ -104,42 +105,38 @@ type GridInstanceModel struct {
 	LongBoxLower  float64 `json:"long_box_lower"`
 
 	// Breakout state
-	BreakoutLevel        string    `json:"breakout_level" gorm:"default:none"` // none/short/mid/long
-	BreakoutDirection    string    `json:"breakout_direction"`                 // up/down
-	BreakoutConfirmCount int       `json:"breakout_confirm_count" gorm:"default:0"`
+	BreakoutLevel        string    `json:"breakout_level"`
+	BreakoutDirection    string    `json:"breakout_direction"`
+	BreakoutConfirmCount int       `json:"breakout_confirm_count"`
 	BreakoutStartTime    time.Time `json:"breakout_start_time"`
 
 	// Position adjustment due to breakout
-	PositionReductionPct float64 `json:"position_reduction_pct" gorm:"default:0"` // 0 = normal, 50 = reduced
+	PositionReductionPct float64 `json:"position_reduction_pct"`
 
 	// Grid direction adjustment state
-	CurrentDirection       string    `json:"current_direction" gorm:"default:neutral"`
+	CurrentDirection       string    `json:"current_direction"`
 	DirectionChangedAt     time.Time `json:"direction_changed_at"`
-	DirectionChangeCount   int       `json:"direction_change_count" gorm:"default:0"`
+	DirectionChangeCount   int       `json:"direction_change_count"`
 
-	TotalProfit     float64   `json:"total_profit" gorm:"default:0"`
-	TotalFees       float64   `json:"total_fees" gorm:"default:0"`
-	TotalTrades     int       `json:"total_trades" gorm:"default:0"`
-	WinningTrades   int       `json:"winning_trades" gorm:"default:0"`
-	MaxDrawdown     float64   `json:"max_drawdown" gorm:"default:0"`
-	CurrentDrawdown float64   `json:"current_drawdown" gorm:"default:0"`
-	PeakEquity      float64   `json:"peak_equity" gorm:"default:0"`
-	DailyProfit     float64   `json:"daily_profit" gorm:"default:0"`
-	DailyLoss       float64   `json:"daily_loss" gorm:"default:0"`
+	TotalProfit     float64   `json:"total_profit"`
+	TotalFees       float64   `json:"total_fees"`
+	TotalTrades     int       `json:"total_trades"`
+	WinningTrades   int       `json:"winning_trades"`
+	MaxDrawdown     float64   `json:"max_drawdown"`
+	CurrentDrawdown float64   `json:"current_drawdown"`
+	PeakEquity      float64   `json:"peak_equity"`
+	DailyProfit     float64   `json:"daily_profit"`
+	DailyLoss       float64   `json:"daily_loss"`
 	LastDailyReset  time.Time `json:"last_daily_reset"`
 }
 
-func (GridInstanceModel) TableName() string {
-	return "grid_instances"
-}
-
-// GridLevelModel GORM model for grid_levels table
+// GridLevelModel model for grid_levels table
 type GridLevelModel struct {
-	ID               string     `json:"id" gorm:"primaryKey"`
-	InstanceID       string     `json:"instance_id" gorm:"index;not null"`
-	LevelIndex       int        `json:"level_index" gorm:"not null"`
-	Price            float64    `json:"price" gorm:"not null"`
-	State            string     `json:"state" gorm:"not null"`
+	ID               string     `json:"id"`
+	InstanceID       string     `json:"instance_id"`
+	LevelIndex       int        `json:"level_index"`
+	Price            float64    `json:"price"`
+	State            string     `json:"state"`
 	Side             string     `json:"side"`
 	OrderID          string     `json:"order_id,omitempty"`
 	OrderPrice       float64    `json:"order_price,omitempty"`
@@ -150,20 +147,16 @@ type GridLevelModel struct {
 	PositionOpenAt   *time.Time `json:"position_open_at,omitempty"`
 	AllocationWeight float64    `json:"allocation_weight"`
 	AllocatedUSD     float64    `json:"allocated_usd"`
-	UpdatedAt        time.Time  `json:"updated_at" gorm:"autoUpdateTime"`
+	UpdatedAt        time.Time  `json:"updated_at"`
 }
 
-func (GridLevelModel) TableName() string {
-	return "grid_levels"
-}
-
-// GridEventModel GORM model for grid_events table
+// GridEventModel model for grid_events table
 type GridEventModel struct {
-	ID          string    `json:"id" gorm:"primaryKey"`
-	InstanceID  string    `json:"instance_id" gorm:"index;not null"`
-	LevelID     string    `json:"level_id,omitempty" gorm:"index"`
-	EventType   string    `json:"event_type" gorm:"not null"`
-	EventTime   time.Time `json:"event_time" gorm:"autoCreateTime"`
+	ID          string    `json:"id"`
+	InstanceID  string    `json:"instance_id"`
+	LevelID     string    `json:"level_id,omitempty"`
+	EventType   string    `json:"event_type"`
+	EventTime   time.Time `json:"event_time"`
 	Price       float64   `json:"price,omitempty"`
 	Quantity    float64   `json:"quantity,omitempty"`
 	Side        string    `json:"side,omitempty"`
@@ -173,20 +166,16 @@ type GridEventModel struct {
 	OldRegime   string    `json:"old_regime,omitempty"`
 	NewRegime   string    `json:"new_regime,omitempty"`
 	TriggerType string    `json:"trigger_type,omitempty"`
-	RawData     string    `json:"raw_data,omitempty" gorm:"type:text"`
+	RawData     string    `json:"raw_data,omitempty"`
 }
 
-func (GridEventModel) TableName() string {
-	return "grid_events"
-}
-
-// GridRegimeAssessmentModel GORM model for grid_regime_assessments table
+// GridRegimeAssessmentModel model for grid_regime_assessments table
 type GridRegimeAssessmentModel struct {
-	ID              string    `json:"id" gorm:"primaryKey"`
-	InstanceID      string    `json:"instance_id" gorm:"index;not null"`
-	AssessedAt      time.Time `json:"assessed_at" gorm:"autoCreateTime"`
-	Regime          string    `json:"regime" gorm:"not null"`
-	Score           int       `json:"score" gorm:"not null"`
+	ID              string    `json:"id"`
+	InstanceID      string    `json:"instance_id"`
+	AssessedAt      time.Time `json:"assessed_at"`
+	Regime          string    `json:"regime"`
+	Score           int       `json:"score"`
 	Confidence      float64   `json:"confidence"`
 	BollingerSignal int       `json:"bollinger_signal"`
 	EMASignal       int       `json:"ema_signal"`
@@ -199,56 +188,183 @@ type GridRegimeAssessmentModel struct {
 	BollingerWidth  float64   `json:"bollinger_width"`
 	EMADistance     float64   `json:"ema_distance"`
 	CurrentPrice    float64   `json:"current_price"`
-	AIReasoning     string    `json:"ai_reasoning" gorm:"type:text"`
+	AIReasoning     string    `json:"ai_reasoning"`
 }
 
-func (GridRegimeAssessmentModel) TableName() string {
-	return "grid_regime_assessments"
+// fromEntGridConfigModel converts ent.GridConfig to store.GridConfigModel
+func fromEntGridConfigModel(c *ent.GridConfig) GridConfigModel {
+	return GridConfigModel{
+		ID:                      c.ID,
+		UserID:                  c.UserID,
+		TraderID:                c.TraderID,
+		Symbol:                  c.Symbol,
+		CreatedAt:               c.CreatedAt,
+		UpdatedAt:               c.UpdatedAt,
+		GridCount:               c.GridCount,
+		TotalInvestment:         c.TotalInvestment,
+		Leverage:                c.Leverage,
+		UpperPrice:              c.UpperPrice,
+		LowerPrice:              c.LowerPrice,
+		UseATRBounds:            c.UseAtrBounds,
+		ATRMultiplier:           c.AtrMultiplier,
+		Distribution:            c.Distribution,
+		MaxDrawdownPct:          c.MaxDrawdownPct,
+		StopLossPct:             c.StopLossPct,
+		DailyLossLimitPct:       c.DailyLossLimitPct,
+		MaxPositionSizePct:      c.MaxPositionSizePct,
+		RegimeCheckInterval:     c.RegimeCheckInterval,
+		AutoPauseOnTrend:        c.AutoPauseOnTrend,
+		MinRangingScore:         c.MinRangingScore,
+		TrendResumeThreshold:    c.TrendResumeThreshold,
+		ShortBoxPeriod:          c.ShortBoxPeriod,
+		MidBoxPeriod:            c.MidBoxPeriod,
+		LongBoxPeriod:           c.LongBoxPeriod,
+		NarrowRegimeLeverage:    c.NarrowRegimeLeverage,
+		StandardRegimeLeverage:  c.StandardRegimeLeverage,
+		WideRegimeLeverage:      c.WideRegimeLeverage,
+		VolatileRegimeLeverage:  c.VolatileRegimeLeverage,
+		NarrowRegimePositionPct: c.NarrowRegimePositionPct,
+		StandardRegimePositionPct: c.StandardRegimePositionPct,
+		WideRegimePositionPct:   c.WideRegimePositionPct,
+		VolatileRegimePositionPct: c.VolatileRegimePositionPct,
+		OrderRefreshSec:         c.OrderRefreshSec,
+		UseMakerOnly:            c.UseMakerOnly,
+		SlippageTolerPct:        c.SlippageTolerPct,
+		AIProvider:              c.AiProvider,
+		AIModel:                 c.AiModel,
+		IsActive:                c.IsActive,
+		EnableDirectionAdjust:   c.EnableDirectionAdjust,
+		DirectionBiasRatio:      c.DirectionBiasRatio,
+	}
+}
+
+// fromEntGridInstanceModel converts ent.GridInstance to store.GridInstanceModel
+func fromEntGridInstanceModel(i *ent.GridInstance) GridInstanceModel {
+	return GridInstanceModel{
+		ID:                   i.ID,
+		ConfigID:             i.ConfigID,
+		Symbol:               i.Symbol,
+		State:                i.State,
+		StartedAt:            i.StartedAt,
+		StoppedAt:            i.StoppedAt,
+		UpdatedAt:            i.UpdatedAt,
+		CurrentUpperPrice:    i.CurrentUpperPrice,
+		CurrentLowerPrice:    i.CurrentLowerPrice,
+		CurrentGridSpacing:   i.CurrentGridSpacing,
+		ActiveLevelCount:     i.ActiveLevelCount,
+		CurrentRegime:        i.CurrentRegime,
+		RegimeScore:          i.RegimeScore,
+		LastRegimeCheck:      i.LastRegimeCheck,
+		ConsecutiveTrending:  i.ConsecutiveTrending,
+		CurrentRegimeLevel:   i.CurrentRegimeLevel,
+		ShortBoxUpper:        i.ShortBoxUpper,
+		ShortBoxLower:        i.ShortBoxLower,
+		MidBoxUpper:          i.MidBoxUpper,
+		MidBoxLower:          i.MidBoxLower,
+		LongBoxUpper:         i.LongBoxUpper,
+		LongBoxLower:         i.LongBoxLower,
+		BreakoutLevel:        i.BreakoutLevel,
+		BreakoutDirection:    i.BreakoutDirection,
+		BreakoutConfirmCount: i.BreakoutConfirmCount,
+		BreakoutStartTime:    i.BreakoutStartTime,
+		PositionReductionPct: i.PositionReductionPct,
+		CurrentDirection:     i.CurrentDirection,
+		DirectionChangedAt:   i.DirectionChangedAt,
+		DirectionChangeCount: i.DirectionChangeCount,
+		TotalProfit:          i.TotalProfit,
+		TotalFees:            i.TotalFees,
+		TotalTrades:          i.TotalTrades,
+		WinningTrades:        i.WinningTrades,
+		MaxDrawdown:          i.MaxDrawdown,
+		CurrentDrawdown:      i.CurrentDrawdown,
+		PeakEquity:           i.PeakEquity,
+		DailyProfit:          i.DailyProfit,
+		DailyLoss:            i.DailyLoss,
+		LastDailyReset:       i.LastDailyReset,
+	}
+}
+
+// fromEntGridLevelModel converts ent.GridLevel to store.GridLevelModel
+func fromEntGridLevelModel(l *ent.GridLevel) GridLevelModel {
+	return GridLevelModel{
+		ID:               l.ID,
+		InstanceID:       l.InstanceID,
+		LevelIndex:       l.LevelIndex,
+		Price:            l.Price,
+		State:            l.State,
+		Side:             l.Side,
+		OrderID:          l.OrderID,
+		OrderPrice:       l.OrderPrice,
+		OrderQuantity:    l.OrderQuantity,
+		OrderCreatedAt:   l.OrderCreatedAt,
+		PositionSize:     l.PositionSize,
+		PositionEntry:    l.PositionEntry,
+		PositionOpenAt:   l.PositionOpenAt,
+		AllocationWeight: l.AllocationWeight,
+		AllocatedUSD:     l.AllocatedUsd,
+		UpdatedAt:        l.UpdatedAt,
+	}
+}
+
+// fromEntGridEventModel converts ent.GridEvent to store.GridEventModel
+func fromEntGridEventModel(e *ent.GridEvent) GridEventModel {
+	return GridEventModel{
+		ID:          e.ID,
+		InstanceID:  e.InstanceID,
+		LevelID:     e.LevelID,
+		EventType:   e.EventType,
+		EventTime:   e.EventTime,
+		Price:       e.Price,
+		Quantity:    e.Quantity,
+		Side:        e.Side,
+		PnL:         e.Pnl,
+		Fee:         e.Fee,
+		Message:     e.Message,
+		OldRegime:   e.OldRegime,
+		NewRegime:   e.NewRegime,
+		TriggerType: e.TriggerType,
+		RawData:     e.RawData,
+	}
+}
+
+// fromEntGridRegimeAssessmentModel converts ent.GridRegimeAssessment to store.GridRegimeAssessmentModel
+func fromEntGridRegimeAssessmentModel(a *ent.GridRegimeAssessment) GridRegimeAssessmentModel {
+	return GridRegimeAssessmentModel{
+		ID:              a.ID,
+		InstanceID:      a.InstanceID,
+		AssessedAt:      a.AssessedAt,
+		Regime:          a.Regime,
+		Score:           a.Score,
+		Confidence:      a.Confidence,
+		BollingerSignal: a.BollingerSignal,
+		EMASignal:       a.EmaSignal,
+		MACDSignal:      a.MacdSignal,
+		VolumeSignal:    a.VolumeSignal,
+		OISignal:        a.OiSignal,
+		FundingSignal:   a.FundingSignal,
+		CandleSignal:    a.CandleSignal,
+		ATR14:           a.Atr14,
+		BollingerWidth:  a.BollingerWidth,
+		EMADistance:     a.EmaDistance,
+		CurrentPrice:    a.CurrentPrice,
+		AIReasoning:     a.AiReasoning,
+	}
 }
 
 // ==================== Grid Store ====================
 
 // GridStore provides database operations for grid trading
 type GridStore struct {
-	db *gorm.DB
+	ec *ent.Client
 }
 
 // NewGridStore creates a new grid store
-func NewGridStore(db *gorm.DB) *GridStore {
-	return &GridStore{db: db}
+func NewGridStore() *GridStore {
+	return &GridStore{}
 }
 
 // InitTables initializes grid-related tables
 func (s *GridStore) InitTables() error {
-	// For PostgreSQL with existing tables, skip AutoMigrate to avoid type conflicts
-	if s.db.Dialector.Name() == "postgres" {
-		var tableExists int64
-		s.db.Raw(`SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'grid_configs'`).Scan(&tableExists)
-
-		if tableExists > 0 {
-			// Tables exist, just ensure indexes
-			s.db.Exec(`CREATE INDEX IF NOT EXISTS idx_grid_configs_user_id ON grid_configs(user_id)`)
-			s.db.Exec(`CREATE INDEX IF NOT EXISTS idx_grid_configs_trader_id ON grid_configs(trader_id)`)
-			s.db.Exec(`CREATE INDEX IF NOT EXISTS idx_grid_instances_config_id ON grid_instances(config_id)`)
-			s.db.Exec(`CREATE INDEX IF NOT EXISTS idx_grid_levels_instance_id ON grid_levels(instance_id)`)
-			s.db.Exec(`CREATE INDEX IF NOT EXISTS idx_grid_events_instance_id ON grid_events(instance_id)`)
-			s.db.Exec(`CREATE INDEX IF NOT EXISTS idx_grid_events_level_id ON grid_events(level_id)`)
-			s.db.Exec(`CREATE INDEX IF NOT EXISTS idx_grid_regime_assessments_instance_id ON grid_regime_assessments(instance_id)`)
-			return nil
-		}
-	}
-
-	// AutoMigrate all grid tables
-	if err := s.db.AutoMigrate(
-		&GridConfigModel{},
-		&GridInstanceModel{},
-		&GridLevelModel{},
-		&GridEventModel{},
-		&GridRegimeAssessmentModel{},
-	); err != nil {
-		return fmt.Errorf("failed to migrate grid tables: %w", err)
-	}
-
 	return nil
 }
 
@@ -256,123 +372,400 @@ func (s *GridStore) InitTables() error {
 
 // SaveGridConfig saves or updates a grid configuration
 func (s *GridStore) SaveGridConfig(config *GridConfigModel) error {
+	ctx := context.Background()
 	config.UpdatedAt = time.Now()
 	if config.CreatedAt.IsZero() {
 		config.CreatedAt = time.Now()
 	}
-	return s.db.Save(config).Error
+
+	exists, err := s.ec.GridConfig.Query().Where(entgridconfig.ID(config.ID)).Exist(ctx)
+	if err != nil {
+		return err
+	}
+
+	if exists {
+		_, err = s.ec.GridConfig.UpdateOneID(config.ID).
+			SetUserID(config.UserID).
+			SetTraderID(config.TraderID).
+			SetSymbol(config.Symbol).
+			SetGridCount(config.GridCount).
+			SetTotalInvestment(config.TotalInvestment).
+			SetLeverage(config.Leverage).
+			SetUpperPrice(config.UpperPrice).
+			SetLowerPrice(config.LowerPrice).
+			SetUseAtrBounds(config.UseATRBounds).
+			SetAtrMultiplier(config.ATRMultiplier).
+			SetDistribution(config.Distribution).
+			SetMaxDrawdownPct(config.MaxDrawdownPct).
+			SetStopLossPct(config.StopLossPct).
+			SetDailyLossLimitPct(config.DailyLossLimitPct).
+			SetMaxPositionSizePct(config.MaxPositionSizePct).
+			SetRegimeCheckInterval(config.RegimeCheckInterval).
+			SetAutoPauseOnTrend(config.AutoPauseOnTrend).
+			SetMinRangingScore(config.MinRangingScore).
+			SetTrendResumeThreshold(config.TrendResumeThreshold).
+			SetShortBoxPeriod(config.ShortBoxPeriod).
+			SetMidBoxPeriod(config.MidBoxPeriod).
+			SetLongBoxPeriod(config.LongBoxPeriod).
+			SetNarrowRegimeLeverage(config.NarrowRegimeLeverage).
+			SetStandardRegimeLeverage(config.StandardRegimeLeverage).
+			SetWideRegimeLeverage(config.WideRegimeLeverage).
+			SetVolatileRegimeLeverage(config.VolatileRegimeLeverage).
+			SetNarrowRegimePositionPct(config.NarrowRegimePositionPct).
+			SetStandardRegimePositionPct(config.StandardRegimePositionPct).
+			SetWideRegimePositionPct(config.WideRegimePositionPct).
+			SetVolatileRegimePositionPct(config.VolatileRegimePositionPct).
+			SetOrderRefreshSec(config.OrderRefreshSec).
+			SetUseMakerOnly(config.UseMakerOnly).
+			SetSlippageTolerPct(config.SlippageTolerPct).
+			SetAiProvider(config.AIProvider).
+			SetAiModel(config.AIModel).
+			SetIsActive(config.IsActive).
+			SetEnableDirectionAdjust(config.EnableDirectionAdjust).
+			SetDirectionBiasRatio(config.DirectionBiasRatio).
+			Save(ctx)
+		return err
+	}
+
+	_, err = s.ec.GridConfig.Create().
+		SetID(config.ID).
+		SetUserID(config.UserID).
+		SetTraderID(config.TraderID).
+		SetSymbol(config.Symbol).
+		SetGridCount(config.GridCount).
+		SetTotalInvestment(config.TotalInvestment).
+		SetLeverage(config.Leverage).
+		SetUpperPrice(config.UpperPrice).
+		SetLowerPrice(config.LowerPrice).
+		SetUseAtrBounds(config.UseATRBounds).
+		SetAtrMultiplier(config.ATRMultiplier).
+		SetDistribution(config.Distribution).
+		SetMaxDrawdownPct(config.MaxDrawdownPct).
+		SetStopLossPct(config.StopLossPct).
+		SetDailyLossLimitPct(config.DailyLossLimitPct).
+		SetMaxPositionSizePct(config.MaxPositionSizePct).
+		SetRegimeCheckInterval(config.RegimeCheckInterval).
+		SetAutoPauseOnTrend(config.AutoPauseOnTrend).
+		SetMinRangingScore(config.MinRangingScore).
+		SetTrendResumeThreshold(config.TrendResumeThreshold).
+		SetShortBoxPeriod(config.ShortBoxPeriod).
+		SetMidBoxPeriod(config.MidBoxPeriod).
+		SetLongBoxPeriod(config.LongBoxPeriod).
+		SetNarrowRegimeLeverage(config.NarrowRegimeLeverage).
+		SetStandardRegimeLeverage(config.StandardRegimeLeverage).
+		SetWideRegimeLeverage(config.WideRegimeLeverage).
+		SetVolatileRegimeLeverage(config.VolatileRegimeLeverage).
+		SetNarrowRegimePositionPct(config.NarrowRegimePositionPct).
+		SetStandardRegimePositionPct(config.StandardRegimePositionPct).
+		SetWideRegimePositionPct(config.WideRegimePositionPct).
+		SetVolatileRegimePositionPct(config.VolatileRegimePositionPct).
+		SetOrderRefreshSec(config.OrderRefreshSec).
+		SetUseMakerOnly(config.UseMakerOnly).
+		SetSlippageTolerPct(config.SlippageTolerPct).
+		SetAiProvider(config.AIProvider).
+		SetAiModel(config.AIModel).
+		SetIsActive(config.IsActive).
+		SetEnableDirectionAdjust(config.EnableDirectionAdjust).
+		SetDirectionBiasRatio(config.DirectionBiasRatio).
+		Save(ctx)
+	return err
 }
 
 // LoadGridConfig loads a grid configuration by ID
 func (s *GridStore) LoadGridConfig(id string) (*GridConfigModel, error) {
-	var config GridConfigModel
-	err := s.db.Where("id = ?", id).First(&config).Error
+	ctx := context.Background()
+	config, err := s.ec.GridConfig.Query().
+		Where(entgridconfig.ID(id)).
+		First(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return &config, nil
+	result := fromEntGridConfigModel(config)
+	return &result, nil
 }
 
 // LoadGridConfigByTrader loads a grid configuration by trader ID
 func (s *GridStore) LoadGridConfigByTrader(traderID string) (*GridConfigModel, error) {
-	var config GridConfigModel
-	err := s.db.Where("trader_id = ? AND is_active = true", traderID).First(&config).Error
+	ctx := context.Background()
+	config, err := s.ec.GridConfig.Query().
+		Where(entgridconfig.TraderID(traderID), entgridconfig.IsActive(true)).
+		First(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return &config, nil
+	result := fromEntGridConfigModel(config)
+	return &result, nil
 }
 
 // ListGridConfigs lists all grid configurations for a user
 func (s *GridStore) ListGridConfigs(userID string) ([]GridConfigModel, error) {
-	var configs []GridConfigModel
-	err := s.db.Where("user_id = ?", userID).Order("created_at DESC").Find(&configs).Error
+	ctx := context.Background()
+	configs, err := s.ec.GridConfig.Query().
+		Where(entgridconfig.UserID(userID)).
+		Order(ent.Desc(entgridconfig.FieldCreatedAt)).
+		All(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return configs, nil
+	result := make([]GridConfigModel, len(configs))
+	for i, c := range configs {
+		result[i] = fromEntGridConfigModel(c)
+	}
+	return result, nil
 }
 
 // DeleteGridConfig deletes a grid configuration and all related data
 func (s *GridStore) DeleteGridConfig(id string) error {
-	return s.db.Transaction(func(tx *gorm.DB) error {
-		// Get all instances for this config
-		var instances []GridInstanceModel
-		if err := tx.Where("config_id = ?", id).Find(&instances).Error; err != nil {
+	ctx := context.Background()
+	tx, err := s.ec.Tx(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if v := recover(); v != nil {
+			tx.Rollback()
+			panic(v)
+		}
+	}()
+
+	instances, err := tx.GridInstance.Query().
+		Where(entgridinstance.ConfigID(id)).
+		All(ctx)
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	for _, instance := range instances {
+		if _, err := tx.GridLevel.Delete().
+			Where(entgridlevel.InstanceID(instance.ID)).
+			Exec(ctx); err != nil {
+			tx.Rollback()
 			return err
 		}
-
-		// Delete related data for each instance
-		for _, instance := range instances {
-			if err := tx.Where("instance_id = ?", instance.ID).Delete(&GridLevelModel{}).Error; err != nil {
-				return err
-			}
-			if err := tx.Where("instance_id = ?", instance.ID).Delete(&GridEventModel{}).Error; err != nil {
-				return err
-			}
-			if err := tx.Where("instance_id = ?", instance.ID).Delete(&GridRegimeAssessmentModel{}).Error; err != nil {
-				return err
-			}
-		}
-
-		// Delete instances
-		if err := tx.Where("config_id = ?", id).Delete(&GridInstanceModel{}).Error; err != nil {
+		if _, err := tx.GridEvent.Delete().
+			Where(entgridevent.InstanceID(instance.ID)).
+			Exec(ctx); err != nil {
+			tx.Rollback()
 			return err
 		}
+		if _, err := tx.GridRegimeAssessment.Delete().
+			Where(entregime.InstanceID(instance.ID)).
+			Exec(ctx); err != nil {
+			tx.Rollback()
+			return err
+		}
+	}
 
-		// Delete config
-		return tx.Where("id = ?", id).Delete(&GridConfigModel{}).Error
-	})
+	if _, err := tx.GridInstance.Delete().
+		Where(entgridinstance.ConfigID(id)).
+		Exec(ctx); err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	if err := tx.GridConfig.DeleteOneID(id).Exec(ctx); err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	return tx.Commit()
 }
 
 // ==================== Instance Operations ====================
 
 // SaveGridInstance saves or updates a grid instance
 func (s *GridStore) SaveGridInstance(instance *GridInstanceModel) error {
+	ctx := context.Background()
 	instance.UpdatedAt = time.Now()
-	return s.db.Save(instance).Error
+
+	exists, err := s.ec.GridInstance.Query().Where(entgridinstance.ID(instance.ID)).Exist(ctx)
+	if err != nil {
+		return err
+	}
+
+	if exists {
+		_, err = s.ec.GridInstance.UpdateOneID(instance.ID).
+			SetConfigID(instance.ConfigID).
+			SetSymbol(instance.Symbol).
+			SetState(instance.State).
+			SetStartedAt(instance.StartedAt).
+			SetNillableStoppedAt(instance.StoppedAt).
+			SetCurrentUpperPrice(instance.CurrentUpperPrice).
+			SetCurrentLowerPrice(instance.CurrentLowerPrice).
+			SetCurrentGridSpacing(instance.CurrentGridSpacing).
+			SetActiveLevelCount(instance.ActiveLevelCount).
+			SetCurrentRegime(instance.CurrentRegime).
+			SetRegimeScore(instance.RegimeScore).
+			SetLastRegimeCheck(instance.LastRegimeCheck).
+			SetConsecutiveTrending(instance.ConsecutiveTrending).
+			SetCurrentRegimeLevel(instance.CurrentRegimeLevel).
+			SetShortBoxUpper(instance.ShortBoxUpper).
+			SetShortBoxLower(instance.ShortBoxLower).
+			SetMidBoxUpper(instance.MidBoxUpper).
+			SetMidBoxLower(instance.MidBoxLower).
+			SetLongBoxUpper(instance.LongBoxUpper).
+			SetLongBoxLower(instance.LongBoxLower).
+			SetBreakoutLevel(instance.BreakoutLevel).
+			SetBreakoutDirection(instance.BreakoutDirection).
+			SetBreakoutConfirmCount(instance.BreakoutConfirmCount).
+			SetBreakoutStartTime(instance.BreakoutStartTime).
+			SetPositionReductionPct(instance.PositionReductionPct).
+			SetCurrentDirection(instance.CurrentDirection).
+			SetDirectionChangedAt(instance.DirectionChangedAt).
+			SetDirectionChangeCount(instance.DirectionChangeCount).
+			SetTotalProfit(instance.TotalProfit).
+			SetTotalFees(instance.TotalFees).
+			SetTotalTrades(instance.TotalTrades).
+			SetWinningTrades(instance.WinningTrades).
+			SetMaxDrawdown(instance.MaxDrawdown).
+			SetCurrentDrawdown(instance.CurrentDrawdown).
+			SetPeakEquity(instance.PeakEquity).
+			SetDailyProfit(instance.DailyProfit).
+			SetDailyLoss(instance.DailyLoss).
+			SetLastDailyReset(instance.LastDailyReset).
+			Save(ctx)
+		return err
+	}
+
+	_, err = s.ec.GridInstance.Create().
+		SetID(instance.ID).
+		SetConfigID(instance.ConfigID).
+		SetSymbol(instance.Symbol).
+		SetState(instance.State).
+		SetStartedAt(instance.StartedAt).
+		SetNillableStoppedAt(instance.StoppedAt).
+		SetCurrentUpperPrice(instance.CurrentUpperPrice).
+		SetCurrentLowerPrice(instance.CurrentLowerPrice).
+		SetCurrentGridSpacing(instance.CurrentGridSpacing).
+		SetActiveLevelCount(instance.ActiveLevelCount).
+		SetCurrentRegime(instance.CurrentRegime).
+		SetRegimeScore(instance.RegimeScore).
+		SetLastRegimeCheck(instance.LastRegimeCheck).
+		SetConsecutiveTrending(instance.ConsecutiveTrending).
+		SetCurrentRegimeLevel(instance.CurrentRegimeLevel).
+		SetShortBoxUpper(instance.ShortBoxUpper).
+		SetShortBoxLower(instance.ShortBoxLower).
+		SetMidBoxUpper(instance.MidBoxUpper).
+		SetMidBoxLower(instance.MidBoxLower).
+		SetLongBoxUpper(instance.LongBoxUpper).
+		SetLongBoxLower(instance.LongBoxLower).
+		SetBreakoutLevel(instance.BreakoutLevel).
+		SetBreakoutDirection(instance.BreakoutDirection).
+		SetBreakoutConfirmCount(instance.BreakoutConfirmCount).
+		SetBreakoutStartTime(instance.BreakoutStartTime).
+		SetPositionReductionPct(instance.PositionReductionPct).
+		SetCurrentDirection(instance.CurrentDirection).
+		SetDirectionChangedAt(instance.DirectionChangedAt).
+		SetDirectionChangeCount(instance.DirectionChangeCount).
+		SetTotalProfit(instance.TotalProfit).
+		SetTotalFees(instance.TotalFees).
+		SetTotalTrades(instance.TotalTrades).
+		SetWinningTrades(instance.WinningTrades).
+		SetMaxDrawdown(instance.MaxDrawdown).
+		SetCurrentDrawdown(instance.CurrentDrawdown).
+		SetPeakEquity(instance.PeakEquity).
+		SetDailyProfit(instance.DailyProfit).
+		SetDailyLoss(instance.DailyLoss).
+		SetLastDailyReset(instance.LastDailyReset).
+		Save(ctx)
+	return err
 }
 
 // LoadGridInstance loads a grid instance by config ID
 func (s *GridStore) LoadGridInstance(configID string) (*GridInstanceModel, error) {
-	var instance GridInstanceModel
-	err := s.db.Where("config_id = ?", configID).
-		Order("started_at DESC").
-		First(&instance).Error
+	ctx := context.Background()
+	instance, err := s.ec.GridInstance.Query().
+		Where(entgridinstance.ConfigID(configID)).
+		Order(ent.Desc(entgridinstance.FieldStartedAt)).
+		First(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return &instance, nil
+	result := fromEntGridInstanceModel(instance)
+	return &result, nil
 }
 
 // LoadGridInstanceByID loads a grid instance by ID
 func (s *GridStore) LoadGridInstanceByID(id string) (*GridInstanceModel, error) {
-	var instance GridInstanceModel
-	err := s.db.Where("id = ?", id).First(&instance).Error
+	ctx := context.Background()
+	instance, err := s.ec.GridInstance.Query().
+		Where(entgridinstance.ID(id)).
+		First(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return &instance, nil
+	result := fromEntGridInstanceModel(instance)
+	return &result, nil
 }
 
 // ListGridInstances lists all instances for a config
 func (s *GridStore) ListGridInstances(configID string) ([]GridInstanceModel, error) {
-	var instances []GridInstanceModel
-	err := s.db.Where("config_id = ?", configID).
-		Order("started_at DESC").
-		Find(&instances).Error
+	ctx := context.Background()
+	instances, err := s.ec.GridInstance.Query().
+		Where(entgridinstance.ConfigID(configID)).
+		Order(ent.Desc(entgridinstance.FieldStartedAt)).
+		All(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return instances, nil
+	result := make([]GridInstanceModel, len(instances))
+	for i, inst := range instances {
+		result[i] = fromEntGridInstanceModel(inst)
+	}
+	return result, nil
 }
 
 // ==================== Level Operations ====================
 
 // SaveGridLevel saves or updates a grid level
 func (s *GridStore) SaveGridLevel(level *GridLevelModel) error {
+	ctx := context.Background()
 	level.UpdatedAt = time.Now()
-	return s.db.Save(level).Error
+
+	exists, err := s.ec.GridLevel.Query().Where(entgridlevel.ID(level.ID)).Exist(ctx)
+	if err != nil {
+		return err
+	}
+
+	if exists {
+		_, err = s.ec.GridLevel.UpdateOneID(level.ID).
+			SetInstanceID(level.InstanceID).
+			SetLevelIndex(level.LevelIndex).
+			SetPrice(level.Price).
+			SetState(level.State).
+			SetSide(level.Side).
+			SetOrderID(level.OrderID).
+			SetOrderPrice(level.OrderPrice).
+			SetOrderQuantity(level.OrderQuantity).
+			SetNillableOrderCreatedAt(level.OrderCreatedAt).
+			SetPositionSize(level.PositionSize).
+			SetPositionEntry(level.PositionEntry).
+			SetNillablePositionOpenAt(level.PositionOpenAt).
+			SetAllocationWeight(level.AllocationWeight).
+			SetAllocatedUsd(level.AllocatedUSD).
+			Save(ctx)
+		return err
+	}
+
+	_, err = s.ec.GridLevel.Create().
+		SetID(level.ID).
+		SetInstanceID(level.InstanceID).
+		SetLevelIndex(level.LevelIndex).
+		SetPrice(level.Price).
+		SetState(level.State).
+		SetSide(level.Side).
+		SetOrderID(level.OrderID).
+		SetOrderPrice(level.OrderPrice).
+		SetOrderQuantity(level.OrderQuantity).
+		SetNillableOrderCreatedAt(level.OrderCreatedAt).
+		SetPositionSize(level.PositionSize).
+		SetPositionEntry(level.PositionEntry).
+		SetNillablePositionOpenAt(level.PositionOpenAt).
+		SetAllocationWeight(level.AllocationWeight).
+		SetAllocatedUsd(level.AllocatedUSD).
+		Save(ctx)
+	return err
 }
 
 // SaveGridLevels saves multiple grid levels
@@ -380,146 +773,262 @@ func (s *GridStore) SaveGridLevels(levels []GridLevelModel) error {
 	if len(levels) == 0 {
 		return nil
 	}
+	ctx := context.Background()
 	now := time.Now()
 	for i := range levels {
 		levels[i].UpdatedAt = now
+		exists, err := s.ec.GridLevel.Query().Where(entgridlevel.ID(levels[i].ID)).Exist(ctx)
+		if err != nil {
+			return err
+		}
+		if exists {
+			_, err = s.ec.GridLevel.UpdateOneID(levels[i].ID).
+				SetInstanceID(levels[i].InstanceID).
+				SetLevelIndex(levels[i].LevelIndex).
+				SetPrice(levels[i].Price).
+				SetState(levels[i].State).
+				SetSide(levels[i].Side).
+				SetOrderID(levels[i].OrderID).
+				SetOrderPrice(levels[i].OrderPrice).
+				SetOrderQuantity(levels[i].OrderQuantity).
+				SetNillableOrderCreatedAt(levels[i].OrderCreatedAt).
+				SetPositionSize(levels[i].PositionSize).
+				SetPositionEntry(levels[i].PositionEntry).
+				SetNillablePositionOpenAt(levels[i].PositionOpenAt).
+				SetAllocationWeight(levels[i].AllocationWeight).
+				SetAllocatedUsd(levels[i].AllocatedUSD).
+				Save(ctx)
+			if err != nil {
+				return err
+			}
+		} else {
+			_, err = s.ec.GridLevel.Create().
+				SetID(levels[i].ID).
+				SetInstanceID(levels[i].InstanceID).
+				SetLevelIndex(levels[i].LevelIndex).
+				SetPrice(levels[i].Price).
+				SetState(levels[i].State).
+				SetSide(levels[i].Side).
+				SetOrderID(levels[i].OrderID).
+				SetOrderPrice(levels[i].OrderPrice).
+				SetOrderQuantity(levels[i].OrderQuantity).
+				SetNillableOrderCreatedAt(levels[i].OrderCreatedAt).
+				SetPositionSize(levels[i].PositionSize).
+				SetPositionEntry(levels[i].PositionEntry).
+				SetNillablePositionOpenAt(levels[i].PositionOpenAt).
+				SetAllocationWeight(levels[i].AllocationWeight).
+				SetAllocatedUsd(levels[i].AllocatedUSD).
+				Save(ctx)
+			if err != nil {
+				return err
+			}
+		}
 	}
-	return s.db.Save(&levels).Error
+	return nil
 }
 
 // LoadGridLevels loads all levels for an instance
 func (s *GridStore) LoadGridLevels(instanceID string) ([]GridLevelModel, error) {
-	var levels []GridLevelModel
-	err := s.db.Where("instance_id = ?", instanceID).
-		Order("level_index ASC").
-		Find(&levels).Error
+	ctx := context.Background()
+	levels, err := s.ec.GridLevel.Query().
+		Where(entgridlevel.InstanceID(instanceID)).
+		Order(ent.Asc(entgridlevel.FieldLevelIndex)).
+		All(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return levels, nil
+	result := make([]GridLevelModel, len(levels))
+	for i, l := range levels {
+		result[i] = fromEntGridLevelModel(l)
+	}
+	return result, nil
 }
 
 // DeleteGridLevels deletes all levels for an instance
 func (s *GridStore) DeleteGridLevels(instanceID string) error {
-	return s.db.Where("instance_id = ?", instanceID).Delete(&GridLevelModel{}).Error
+	ctx := context.Background()
+	_, err := s.ec.GridLevel.Delete().
+		Where(entgridlevel.InstanceID(instanceID)).
+		Exec(ctx)
+	return err
 }
 
 // ==================== Event Operations ====================
 
 // SaveGridEvent saves a grid event
 func (s *GridStore) SaveGridEvent(event *GridEventModel) error {
+	ctx := context.Background()
 	if event.EventTime.IsZero() {
 		event.EventTime = time.Now()
 	}
-	return s.db.Create(event).Error
+	_, err := s.ec.GridEvent.Create().
+		SetID(event.ID).
+		SetInstanceID(event.InstanceID).
+		SetLevelID(event.LevelID).
+		SetEventType(event.EventType).
+		SetEventTime(event.EventTime).
+		SetPrice(event.Price).
+		SetQuantity(event.Quantity).
+		SetSide(event.Side).
+		SetPnl(event.PnL).
+		SetFee(event.Fee).
+		SetMessage(event.Message).
+		SetOldRegime(event.OldRegime).
+		SetNewRegime(event.NewRegime).
+		SetTriggerType(event.TriggerType).
+		SetRawData(event.RawData).
+		Save(ctx)
+	return err
 }
 
 // LoadRecentGridEvents loads recent events for an instance
 func (s *GridStore) LoadRecentGridEvents(instanceID string, limit int) ([]GridEventModel, error) {
-	var events []GridEventModel
-	query := s.db.Where("instance_id = ?", instanceID).
-		Order("event_time DESC")
+	ctx := context.Background()
+	query := s.ec.GridEvent.Query().
+		Where(entgridevent.InstanceID(instanceID)).
+		Order(ent.Desc(entgridevent.FieldEventTime))
 	if limit > 0 {
 		query = query.Limit(limit)
 	}
-	err := query.Find(&events).Error
+	events, err := query.All(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return events, nil
+	result := make([]GridEventModel, len(events))
+	for i, e := range events {
+		result[i] = fromEntGridEventModel(e)
+	}
+	return result, nil
 }
 
 // LoadGridEventsByType loads events of a specific type
 func (s *GridStore) LoadGridEventsByType(instanceID, eventType string, limit int) ([]GridEventModel, error) {
-	var events []GridEventModel
-	query := s.db.Where("instance_id = ? AND event_type = ?", instanceID, eventType).
-		Order("event_time DESC")
+	ctx := context.Background()
+	query := s.ec.GridEvent.Query().
+		Where(entgridevent.InstanceID(instanceID), entgridevent.EventType(eventType)).
+		Order(ent.Desc(entgridevent.FieldEventTime))
 	if limit > 0 {
 		query = query.Limit(limit)
 	}
-	err := query.Find(&events).Error
+	events, err := query.All(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return events, nil
+	result := make([]GridEventModel, len(events))
+	for i, e := range events {
+		result[i] = fromEntGridEventModel(e)
+	}
+	return result, nil
 }
 
 // CountGridEvents counts events for an instance
 func (s *GridStore) CountGridEvents(instanceID string) (int64, error) {
-	var count int64
-	err := s.db.Model(&GridEventModel{}).
-		Where("instance_id = ?", instanceID).
-		Count(&count).Error
-	return count, err
+	ctx := context.Background()
+	count, err := s.ec.GridEvent.Query().
+		Where(entgridevent.InstanceID(instanceID)).
+		Count(ctx)
+	return int64(count), err
 }
 
 // ==================== Regime Assessment Operations ====================
 
 // SaveGridRegimeAssessment saves a regime assessment
 func (s *GridStore) SaveGridRegimeAssessment(assessment *GridRegimeAssessmentModel) error {
+	ctx := context.Background()
 	if assessment.AssessedAt.IsZero() {
 		assessment.AssessedAt = time.Now()
 	}
-	return s.db.Create(assessment).Error
+	_, err := s.ec.GridRegimeAssessment.Create().
+		SetID(assessment.ID).
+		SetInstanceID(assessment.InstanceID).
+		SetAssessedAt(assessment.AssessedAt).
+		SetRegime(assessment.Regime).
+		SetScore(assessment.Score).
+		SetConfidence(assessment.Confidence).
+		SetBollingerSignal(assessment.BollingerSignal).
+		SetEmaSignal(assessment.EMASignal).
+		SetMacdSignal(assessment.MACDSignal).
+		SetVolumeSignal(assessment.VolumeSignal).
+		SetOiSignal(assessment.OISignal).
+		SetFundingSignal(assessment.FundingSignal).
+		SetCandleSignal(assessment.CandleSignal).
+		SetAtr14(assessment.ATR14).
+		SetBollingerWidth(assessment.BollingerWidth).
+		SetEmaDistance(assessment.EMADistance).
+		SetCurrentPrice(assessment.CurrentPrice).
+		SetAiReasoning(assessment.AIReasoning).
+		Save(ctx)
+	return err
 }
 
 // LoadLatestGridRegime loads the latest regime assessment
 func (s *GridStore) LoadLatestGridRegime(instanceID string) (*GridRegimeAssessmentModel, error) {
-	var assessment GridRegimeAssessmentModel
-	err := s.db.Where("instance_id = ?", instanceID).
-		Order("assessed_at DESC").
-		First(&assessment).Error
+	ctx := context.Background()
+	assessment, err := s.ec.GridRegimeAssessment.Query().
+		Where(entregime.InstanceID(instanceID)).
+		Order(ent.Desc(entregime.FieldAssessedAt)).
+		First(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return &assessment, nil
+	result := fromEntGridRegimeAssessmentModel(assessment)
+	return &result, nil
 }
 
 // LoadGridRegimeHistory loads regime assessment history
 func (s *GridStore) LoadGridRegimeHistory(instanceID string, limit int) ([]GridRegimeAssessmentModel, error) {
-	var assessments []GridRegimeAssessmentModel
-	query := s.db.Where("instance_id = ?", instanceID).
-		Order("assessed_at DESC")
+	ctx := context.Background()
+	query := s.ec.GridRegimeAssessment.Query().
+		Where(entregime.InstanceID(instanceID)).
+		Order(ent.Desc(entregime.FieldAssessedAt))
 	if limit > 0 {
 		query = query.Limit(limit)
 	}
-	err := query.Find(&assessments).Error
+	assessments, err := query.All(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return assessments, nil
+	result := make([]GridRegimeAssessmentModel, len(assessments))
+	for i, a := range assessments {
+		result[i] = fromEntGridRegimeAssessmentModel(a)
+	}
+	return result, nil
 }
 
 // ==================== Statistics Operations ====================
 
 // GetGridInstanceStatistics returns statistics for an instance
 func (s *GridStore) GetGridInstanceStatistics(instanceID string) (map[string]interface{}, error) {
-	var instance GridInstanceModel
-	if err := s.db.Where("id = ?", instanceID).First(&instance).Error; err != nil {
+	ctx := context.Background()
+	instance, err := s.ec.GridInstance.Query().
+		Where(entgridinstance.ID(instanceID)).
+		First(ctx)
+	if err != nil {
 		return nil, err
 	}
 
 	// Count events by type
-	var eventCounts []struct {
-		EventType string
-		Count     int64
+	events, err := s.ec.GridEvent.Query().
+		Where(entgridevent.InstanceID(instanceID)).
+		All(ctx)
+	if err != nil {
+		return nil, err
 	}
-	s.db.Model(&GridEventModel{}).
-		Select("event_type, count(*) as count").
-		Where("instance_id = ?", instanceID).
-		Group("event_type").
-		Find(&eventCounts)
 
 	eventCountMap := make(map[string]int64)
-	for _, ec := range eventCounts {
-		eventCountMap[ec.EventType] = ec.Count
+	for _, e := range events {
+		eventCountMap[e.EventType]++
 	}
 
 	// Get latest regime
-	var latestRegime GridRegimeAssessmentModel
-	s.db.Where("instance_id = ?", instanceID).
-		Order("assessed_at DESC").
-		First(&latestRegime)
+	latestRegime, err := s.ec.GridRegimeAssessment.Query().
+		Where(entregime.InstanceID(instanceID)).
+		Order(ent.Desc(entregime.FieldAssessedAt)).
+		First(ctx)
+	latestRegimeScore := 0
+	if err == nil {
+		latestRegimeScore = latestRegime.Score
+	}
 
 	winRate := 0.0
 	if instance.TotalTrades > 0 {
@@ -543,52 +1052,81 @@ func (s *GridStore) GetGridInstanceStatistics(instanceID string) (map[string]int
 		"current_regime":      instance.CurrentRegime,
 		"regime_score":        instance.RegimeScore,
 		"event_counts":        eventCountMap,
-		"latest_regime_score": latestRegime.Score,
+		"latest_regime_score": latestRegimeScore,
 	}, nil
 }
 
 // GetGridPerformanceMetrics returns performance metrics for a time period
 func (s *GridStore) GetGridPerformanceMetrics(instanceID string, from, to time.Time) (map[string]interface{}, error) {
-	// Count trades in period
-	var tradeCounts struct {
-		TotalFills int64
-		BuyFills   int64
-		SellFills  int64
-	}
-	s.db.Model(&GridEventModel{}).
-		Select("count(*) as total_fills, "+
-			"sum(case when side = 'buy' then 1 else 0 end) as buy_fills, "+
-			"sum(case when side = 'sell' then 1 else 0 end) as sell_fills").
-		Where("instance_id = ? AND event_type = 'order_filled' AND event_time BETWEEN ? AND ?",
-			instanceID, from, to).
-		Scan(&tradeCounts)
+	ctx := context.Background()
 
-	// Sum profit/loss
-	var pnlSum struct {
-		TotalPnL float64
-		TotalFee float64
+	// Count trades in period
+	tradeCount, _ := s.ec.GridEvent.Query().
+		Where(
+			entgridevent.InstanceID(instanceID),
+			entgridevent.EventType("order_filled"),
+			entgridevent.EventTimeGTE(from),
+			entgridevent.EventTimeLTE(to),
+		).
+		Count(ctx)
+
+	buyCount, _ := s.ec.GridEvent.Query().
+		Where(
+			entgridevent.InstanceID(instanceID),
+			entgridevent.EventType("order_filled"),
+			entgridevent.Side("buy"),
+			entgridevent.EventTimeGTE(from),
+			entgridevent.EventTimeLTE(to),
+		).
+		Count(ctx)
+
+	sellCount, _ := s.ec.GridEvent.Query().
+		Where(
+			entgridevent.InstanceID(instanceID),
+			entgridevent.EventType("order_filled"),
+			entgridevent.Side("sell"),
+			entgridevent.EventTimeGTE(from),
+			entgridevent.EventTimeLTE(to),
+		).
+		Count(ctx)
+
+	// Sum profit/loss from events in period
+	pnlEvents, err := s.ec.GridEvent.Query().
+		Where(
+			entgridevent.InstanceID(instanceID),
+			entgridevent.EventTimeGTE(from),
+			entgridevent.EventTimeLTE(to),
+		).
+		All(ctx)
+	if err != nil {
+		return nil, err
 	}
-	s.db.Model(&GridEventModel{}).
-		Select("coalesce(sum(pnl), 0) as total_pnl, coalesce(sum(fee), 0) as total_fee").
-		Where("instance_id = ? AND event_time BETWEEN ? AND ?", instanceID, from, to).
-		Scan(&pnlSum)
+
+	var totalPnL, totalFee float64
+	for _, e := range pnlEvents {
+		totalPnL += e.Pnl
+		totalFee += e.Fee
+	}
 
 	// Count regime changes
-	var regimeChanges int64
-	s.db.Model(&GridEventModel{}).
-		Where("instance_id = ? AND event_type = 'regime_change' AND event_time BETWEEN ? AND ?",
-			instanceID, from, to).
-		Count(&regimeChanges)
+	regimeChanges, _ := s.ec.GridEvent.Query().
+		Where(
+			entgridevent.InstanceID(instanceID),
+			entgridevent.EventType("regime_change"),
+			entgridevent.EventTimeGTE(from),
+			entgridevent.EventTimeLTE(to),
+		).
+		Count(ctx)
 
 	return map[string]interface{}{
 		"period_start":   from,
 		"period_end":     to,
-		"total_fills":    tradeCounts.TotalFills,
-		"buy_fills":      tradeCounts.BuyFills,
-		"sell_fills":     tradeCounts.SellFills,
-		"total_pnl":      pnlSum.TotalPnL,
-		"total_fees":     pnlSum.TotalFee,
-		"net_pnl":        pnlSum.TotalPnL - pnlSum.TotalFee,
-		"regime_changes": regimeChanges,
+		"total_fills":    int64(tradeCount),
+		"buy_fills":      int64(buyCount),
+		"sell_fills":     int64(sellCount),
+		"total_pnl":      totalPnL,
+		"total_fees":     totalFee,
+		"net_pnl":        totalPnL - totalFee,
+		"regime_changes": int64(regimeChanges),
 	}, nil
 }

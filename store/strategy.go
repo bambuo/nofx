@@ -1,34 +1,54 @@
 package store
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"time"
 
-	"gorm.io/gorm"
+	"nofx/ent"
+	entstrategy "nofx/ent/strategy"
 )
 
 // StrategyStore strategy storage
 type StrategyStore struct {
-	db *gorm.DB
+	ec *ent.Client
 }
 
 // Strategy strategy configuration
 type Strategy struct {
-	ID            string    `gorm:"primaryKey" json:"id"`
-	UserID        string    `gorm:"column:user_id;not null;default:'';index" json:"user_id"`
-	Name          string    `gorm:"not null" json:"name"`
-	Description   string    `gorm:"default:''" json:"description"`
-	IsActive      bool      `gorm:"column:is_active;default:false;index" json:"is_active"`
-	IsDefault     bool      `gorm:"column:is_default;default:false" json:"is_default"`
-	IsPublic      bool      `gorm:"column:is_public;default:false;index" json:"is_public"`       // whether visible in strategy market
-	ConfigVisible bool      `gorm:"column:config_visible;default:true" json:"config_visible"`    // whether config details are visible
-	Config        string    `gorm:"not null;default:'{}'" json:"config"`
+	ID            string    `json:"id"`
+	UserID        string    `json:"user_id"`
+	Name          string    `json:"name"`
+	Description   string    `json:"description"`
+	IsActive      bool      `json:"is_active"`
+	IsDefault     bool      `json:"is_default"`
+	IsPublic      bool      `json:"is_public"`
+	ConfigVisible bool      `json:"config_visible"`
+	Config        string    `json:"config"`
 	CreatedAt     time.Time `json:"created_at"`
 	UpdatedAt     time.Time `json:"updated_at"`
 }
 
-func (Strategy) TableName() string { return "strategies" }
+// fromEntStrategy converts ent.Strategy to store.Strategy
+func fromEntStrategy(es *ent.Strategy) *Strategy {
+	if es == nil {
+		return nil
+	}
+	return &Strategy{
+		ID:            es.ID,
+		UserID:        es.UserID,
+		Name:          es.Name,
+		Description:   es.Description,
+		IsActive:      es.IsActive,
+		IsDefault:     es.IsDefault,
+		IsPublic:      es.IsPublic,
+		ConfigVisible: es.ConfigVisible,
+		Config:        es.Config,
+		CreatedAt:     es.CreatedAt,
+		UpdatedAt:     es.UpdatedAt,
+	}
+}
 
 // StrategyConfig strategy configuration details (JSON structure)
 type StrategyConfig struct {
@@ -117,9 +137,8 @@ type CoinSourceConfig struct {
 	OITopLimit int `json:"oi_top_limit,omitempty"`
 	// whether to use OI Low (持仓减少榜，适合做空)
 	UseOILow bool `json:"use_oi_low"`
-	// OI Low maximum count
+	// OILow maximum count
 	OILowLimit int `json:"oi_low_limit,omitempty"`
-	// Note: API URLs are now built automatically using NofxOSAPIKey from IndicatorConfig
 }
 
 // IndicatorConfig indicator configuration
@@ -210,9 +229,9 @@ type RiskControlConfig struct {
 	// Altcoin exchange leverage for opening positions (AI guided)
 	AltcoinMaxLeverage int `json:"altcoin_max_leverage"`
 
-	// BTC/ETH single position max value = equity × this ratio (CODE ENFORCED, default: 5)
+	// BTC/ETH single position max value = equity x this ratio (CODE ENFORCED, default: 5)
 	BTCETHMaxPositionValueRatio float64 `json:"btc_eth_max_position_value_ratio"`
-	// Altcoin single position max value = equity × this ratio (CODE ENFORCED, default: 1)
+	// Altcoin single position max value = equity x this ratio (CODE ENFORCED, default: 1)
 	AltcoinMaxPositionValueRatio float64 `json:"altcoin_max_position_value_ratio"`
 
 	// Max margin utilization (e.g. 0.9 = 90%) (CODE ENFORCED)
@@ -227,26 +246,24 @@ type RiskControlConfig struct {
 }
 
 // NewStrategyStore creates a new StrategyStore
-func NewStrategyStore(db *gorm.DB) *StrategyStore {
-	return &StrategyStore{db: db}
+func NewStrategyStore() *StrategyStore {
+	return &StrategyStore{}
 }
 
 func (s *StrategyStore) initTables() error {
-	// AutoMigrate will add missing columns without dropping existing data
-	return s.db.AutoMigrate(&Strategy{})
+	return nil
 }
 
 func (s *StrategyStore) initDefaultData() error {
-	// No longer pre-populate strategies - create on demand when user configures
 	return nil
 }
 
 // GetDefaultStrategyConfig returns the default strategy configuration for the given language
 func GetDefaultStrategyConfig(lang string) StrategyConfig {
 	// Normalize language to "zh" or "en"
-	normalizedLang := "en"
-	if lang == "zh" {
-		normalizedLang = "zh"
+	normalizedLang := "zh"
+	if lang == "en" {
+		normalizedLang = "en"
 	}
 
 	config := StrategyConfig{
@@ -269,7 +286,7 @@ func GetDefaultStrategyConfig(lang string) StrategyConfig {
 				EnableMultiTimeframe: true,
 				SelectedTimeframes:   []string{"5m", "15m", "1h", "4h"},
 			},
-			EnableRawKlines:   true, // Required - raw OHLCV data for AI analysis
+			EnableRawKlines:   true,
 			EnableEMA:         false,
 			EnableMACD:        false,
 			EnableRSI:         false,
@@ -302,15 +319,15 @@ func GetDefaultStrategyConfig(lang string) StrategyConfig {
 			PriceRankingLimit:    10,
 		},
 		RiskControl: RiskControlConfig{
-			MaxPositions:                    3,   // Max 3 coins simultaneously (CODE ENFORCED)
-			BTCETHMaxLeverage:               5,   // BTC/ETH exchange leverage (AI guided)
-			AltcoinMaxLeverage:              5,   // Altcoin exchange leverage (AI guided)
-			BTCETHMaxPositionValueRatio:     5.0, // BTC/ETH: max position = 5x equity (CODE ENFORCED)
-			AltcoinMaxPositionValueRatio:    1.0, // Altcoin: max position = 1x equity (CODE ENFORCED)
-			MaxMarginUsage:                  0.9, // Max 90% margin usage (CODE ENFORCED)
-			MinPositionSize:                 12,  // Min 12 USDT per position (CODE ENFORCED)
-			MinRiskRewardRatio:              3.0, // Min 3:1 profit/loss ratio (AI guided)
-			MinConfidence:                   75,  // Min 75% confidence (AI guided)
+			MaxPositions:                    3,
+			BTCETHMaxLeverage:               5,
+			AltcoinMaxLeverage:              5,
+			BTCETHMaxPositionValueRatio:     5.0,
+			AltcoinMaxPositionValueRatio:    1.0,
+			MaxMarginUsage:                  0.9,
+			MinPositionSize:                 12,
+			MinRiskRewardRatio:              3.0,
+			MinConfidence:                   75,
 		},
 	}
 
@@ -359,115 +376,169 @@ Only enter positions when multiple signals resonate. Freely use any effective an
 	return config
 }
 
-// Create create a strategy
-func (s *StrategyStore) Create(strategy *Strategy) error {
-	return s.db.Create(strategy).Error
+// Create creates a strategy using ent
+func (s *StrategyStore) Create(ctx context.Context, strategy *Strategy) error {
+	if s.ec == nil {
+		return fmt.Errorf("ent client not available")
+	}
+	_, err := s.ec.Strategy.Create().
+		SetID(strategy.ID).
+		SetUserID(strategy.UserID).
+		SetName(strategy.Name).
+		SetNillableDescription(strPtr(strategy.Description)).
+		SetIsActive(strategy.IsActive).
+		SetIsDefault(strategy.IsDefault).
+		SetIsPublic(strategy.IsPublic).
+		SetConfigVisible(strategy.ConfigVisible).
+		SetConfig(strategy.Config).
+		Save(ctx)
+	return err
 }
 
-// Update update a strategy
-func (s *StrategyStore) Update(strategy *Strategy) error {
-	return s.db.Model(&Strategy{}).
-		Where("id = ? AND user_id = ?", strategy.ID, strategy.UserID).
-		Updates(map[string]interface{}{
-			"name":           strategy.Name,
-			"description":    strategy.Description,
-			"config":         strategy.Config,
-			"is_public":      strategy.IsPublic,
-			"config_visible": strategy.ConfigVisible,
-			"updated_at":     time.Now().UTC(),
-		}).Error
+// Update updates a strategy using ent
+func (s *StrategyStore) Update(ctx context.Context, strategy *Strategy) error {
+	if s.ec == nil {
+		return fmt.Errorf("ent client not available")
+	}
+	return s.ec.Strategy.Update().
+		Where(entstrategy.And(entstrategy.ID(strategy.ID), entstrategy.UserID(strategy.UserID))).
+		SetName(strategy.Name).
+		SetNillableDescription(strPtr(strategy.Description)).
+		SetConfig(strategy.Config).
+		SetIsPublic(strategy.IsPublic).
+		SetConfigVisible(strategy.ConfigVisible).
+		Exec(ctx)
 }
 
-// Delete delete a strategy
-func (s *StrategyStore) Delete(userID, id string) error {
-	// do not allow deleting system default strategy
-	var st Strategy
-	if err := s.db.Where("id = ?", id).First(&st).Error; err == nil && st.IsDefault {
+// Delete deletes a strategy using ent
+func (s *StrategyStore) Delete(ctx context.Context, userID, id string) error {
+	if s.ec == nil {
+		return fmt.Errorf("ent client not available")
+	}
+	st, err := s.ec.Strategy.Query().Where(entstrategy.ID(id)).First(ctx)
+	if err == nil && st.IsDefault {
 		return fmt.Errorf("cannot delete system default strategy")
 	}
-
-	return s.db.Where("id = ? AND user_id = ?", id, userID).Delete(&Strategy{}).Error
+	n, err := s.ec.Strategy.Delete().Where(entstrategy.And(entstrategy.ID(id), entstrategy.UserID(userID))).Exec(ctx)
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return fmt.Errorf("strategy not found")
+	}
+	return nil
 }
 
-// List get user's strategy list
-func (s *StrategyStore) List(userID string) ([]*Strategy, error) {
-	var strategies []*Strategy
-	err := s.db.Where("user_id = ? OR is_default = ?", userID, true).
-		Order("is_default DESC, created_at DESC").
-		Find(&strategies).Error
+// List gets user's strategy list using ent
+func (s *StrategyStore) List(ctx context.Context, userID string) ([]*Strategy, error) {
+	if s.ec == nil {
+		return nil, fmt.Errorf("ent client not available")
+	}
+	strategies, err := s.ec.Strategy.Query().
+		Where(entstrategy.Or(entstrategy.UserID(userID), entstrategy.IsDefault(true))).
+		Order(ent.Desc(entstrategy.FieldIsDefault), ent.Desc(entstrategy.FieldCreatedAt)).
+		All(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return strategies, nil
+	result := make([]*Strategy, len(strategies))
+	for i, s := range strategies {
+		result[i] = fromEntStrategy(s)
+	}
+	return result, nil
 }
 
-// ListPublic get all public strategies for the strategy market
-func (s *StrategyStore) ListPublic() ([]*Strategy, error) {
-	var strategies []*Strategy
-	err := s.db.Where("is_public = ?", true).
-		Order("created_at DESC").
-		Find(&strategies).Error
+// ListPublic gets all public strategies using ent
+func (s *StrategyStore) ListPublic(ctx context.Context) ([]*Strategy, error) {
+	if s.ec == nil {
+		return nil, fmt.Errorf("ent client not available")
+	}
+	strategies, err := s.ec.Strategy.Query().
+		Where(entstrategy.IsPublic(true)).
+		Order(ent.Desc(entstrategy.FieldCreatedAt)).
+		All(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return strategies, nil
+	result := make([]*Strategy, len(strategies))
+	for i, s := range strategies {
+		result[i] = fromEntStrategy(s)
+	}
+	return result, nil
 }
 
-// Get get a single strategy
-func (s *StrategyStore) Get(userID, id string) (*Strategy, error) {
-	var st Strategy
-	err := s.db.Where("id = ? AND (user_id = ? OR is_default = ?)", id, userID, true).
-		First(&st).Error
+// Get gets a single strategy using ent
+func (s *StrategyStore) Get(ctx context.Context, userID, id string) (*Strategy, error) {
+	if s.ec == nil {
+		return nil, fmt.Errorf("ent client not available")
+	}
+	st, err := s.ec.Strategy.Query().
+		Where(entstrategy.And(entstrategy.ID(id), entstrategy.Or(entstrategy.UserID(userID), entstrategy.IsDefault(true)))).
+		Only(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return &st, nil
+	return fromEntStrategy(st), nil
 }
 
-// GetActive get user's currently active strategy
-func (s *StrategyStore) GetActive(userID string) (*Strategy, error) {
-	var st Strategy
-	err := s.db.Where("user_id = ? AND is_active = ?", userID, true).First(&st).Error
-	if err == gorm.ErrRecordNotFound {
-		// no active strategy, return system default strategy
-		return s.GetDefault()
+// GetActive gets user's currently active strategy using ent
+func (s *StrategyStore) GetActive(ctx context.Context, userID string) (*Strategy, error) {
+	if s.ec == nil {
+		return nil, fmt.Errorf("ent client not available")
 	}
+	st, err := s.ec.Strategy.Query().
+		Where(entstrategy.And(entstrategy.UserID(userID), entstrategy.IsActive(true))).
+		First(ctx)
+	if err != nil && !ent.IsNotFound(err) {
+		return nil, err
+	}
+	if err == nil {
+		return fromEntStrategy(st), nil
+	}
+	return s.GetDefault(ctx)
+}
+
+// GetDefault gets system default strategy using ent
+func (s *StrategyStore) GetDefault(ctx context.Context) (*Strategy, error) {
+	if s.ec == nil {
+		return nil, fmt.Errorf("ent client not available")
+	}
+	st, err := s.ec.Strategy.Query().Where(entstrategy.IsDefault(true)).First(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return &st, nil
+	return fromEntStrategy(st), nil
 }
 
-// GetDefault get system default strategy
-func (s *StrategyStore) GetDefault() (*Strategy, error) {
-	var st Strategy
-	err := s.db.Where("is_default = ?", true).First(&st).Error
-	if err != nil {
-		return nil, err
+// SetActive sets active strategy using ent (deactivates others first)
+func (s *StrategyStore) SetActive(ctx context.Context, userID, strategyID string) error {
+	if s.ec == nil {
+		return fmt.Errorf("ent client not available")
 	}
-	return &st, nil
+	tx, err := s.ec.Tx(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if err := tx.Strategy.Update().
+		Where(entstrategy.UserID(userID)).
+		SetIsActive(false).
+		Exec(ctx); err != nil {
+		return err
+	}
+	if err := tx.Strategy.Update().
+		Where(entstrategy.And(entstrategy.ID(strategyID), entstrategy.Or(entstrategy.UserID(userID), entstrategy.IsDefault(true)))).
+		SetIsActive(true).
+		Exec(ctx); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
-// SetActive set active strategy (will first deactivate other strategies)
-func (s *StrategyStore) SetActive(userID, strategyID string) error {
-	return s.db.Transaction(func(tx *gorm.DB) error {
-		// first deactivate all strategies for the user
-		if err := tx.Model(&Strategy{}).Where("user_id = ?", userID).
-			Update("is_active", false).Error; err != nil {
-			return err
-		}
-
-		// activate specified strategy
-		return tx.Model(&Strategy{}).
-			Where("id = ? AND (user_id = ? OR is_default = ?)", strategyID, userID, true).
-			Update("is_active", true).Error
-	})
-}
-
-// Duplicate duplicate a strategy (used to create custom strategy based on default strategy)
-func (s *StrategyStore) Duplicate(userID, sourceID, newID, newName string) error {
+// Duplicate duplicates a strategy (used to create custom strategy based on default strategy)
+func (s *StrategyStore) Duplicate(ctx context.Context, userID, sourceID, newID, newName string) error {
 	// get source strategy
-	source, err := s.Get(userID, sourceID)
+	source, err := s.Get(ctx, userID, sourceID)
 	if err != nil {
 		return fmt.Errorf("failed to get source strategy: %w", err)
 	}
@@ -483,7 +554,7 @@ func (s *StrategyStore) Duplicate(userID, sourceID, newID, newName string) error
 		Config:      source.Config,
 	}
 
-	return s.Create(newStrategy)
+	return s.Create(ctx, newStrategy)
 }
 
 // ParseConfig parse strategy configuration JSON

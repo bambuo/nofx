@@ -133,7 +133,7 @@ func (tm *TraderManager) StopAll() {
 // AutoStartRunningTraders automatically starts traders marked as running in the database
 func (tm *TraderManager) AutoStartRunningTraders(st *store.Store) {
 	// Get all trader configurations (single query)
-	traderList, err := st.Trader().ListAll()
+	traderList, err := st.Trader().ListAll(context.Background())
 	if err != nil {
 		logger.Infof("⚠️ Failed to get trader list: %v", err)
 		return
@@ -433,7 +433,7 @@ func (tm *TraderManager) LoadUserTradersFromStore(st *store.Store, userID string
 	defer tm.mu.Unlock()
 
 	// Get all traders for the specified user
-	traders, err := st.Trader().List(userID)
+	traders, err := st.Trader().List(context.Background(), userID)
 	if err != nil {
 		return fmt.Errorf("failed to get trader list for user %s: %w", userID, err)
 	}
@@ -539,7 +539,7 @@ func (tm *TraderManager) LoadTradersFromStore(st *store.Store) error {
 	var allTraders []*store.Trader
 	for _, userID := range userIDs {
 		// Get traders for each user
-		traders, err := st.Trader().List(userID)
+		traders, err := st.Trader().List(context.Background(), userID)
 		if err != nil {
 			logger.Infof("⚠️ Failed to get traders for user %s: %v", userID, err)
 			continue
@@ -634,7 +634,7 @@ func (tm *TraderManager) addTraderFromStore(traderCfg *store.Trader, aiModelCfg 
 	// Load strategy config (must have strategy)
 	var strategyConfig *store.StrategyConfig
 	if traderCfg.StrategyID != "" {
-		strategy, err := st.Strategy().Get(traderCfg.UserID, traderCfg.StrategyID)
+		strategy, err := st.Strategy().Get(context.Background(), traderCfg.UserID, traderCfg.StrategyID)
 		if err != nil {
 			return fmt.Errorf("failed to load strategy %s for trader %s: %w", traderCfg.StrategyID, traderCfg.Name, err)
 		}
@@ -751,7 +751,7 @@ func (tm *TraderManager) addTraderFromStore(traderCfg *store.Trader, aiModelCfg 
 				logger.Warnf("⚠️ Trader '%s' stopped with error: %v", traderName, err)
 				// Update database to reflect stopped state
 				if st != nil {
-					_ = st.Trader().UpdateStatus(userID, traderID, false)
+					_ = st.Trader().UpdateStatus(context.Background(), userID, traderID, false)
 				}
 			}
 		}(at, traderCfg.Name, traderCfg.ID, traderCfg.UserID)

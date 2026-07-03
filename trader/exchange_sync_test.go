@@ -1,14 +1,22 @@
 package trader
 
 import (
-	"nofx/store"
+	"context"
+	"database/sql"
 	"testing"
 	"time"
 
-	"gorm.io/driver/sqlite"
-	"gorm.io/gorm"
-	"gorm.io/gorm/logger"
+	"nofx/ent"
+	"nofx/store"
+
+	sqlite3 "modernc.org/sqlite"
 )
+
+func init() {
+	// ent expects the driver to be registered as "sqlite3",
+	// but modernc.org/sqlite registers as "sqlite"
+	sql.Register("sqlite3", &sqlite3.Driver{})
+}
 
 // TestScenario represents a trading scenario to test
 type TestScenario struct {
@@ -117,17 +125,16 @@ func runStandardTests(t *testing.T, exchangeName string) {
 	for _, scenario := range scenarios {
 		t.Run(scenario.Name, func(t *testing.T) {
 			// Setup database
-			db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{
-				Logger: logger.Default.LogMode(logger.Silent),
-			})
+			ec, err := ent.Open("sqlite3", "file:ent?mode=memory&cache=private&_pragma=foreign_keys(1)")
 			if err != nil {
 				t.Fatalf("Failed to create test database: %v", err)
 			}
-
-			positionStore := store.NewPositionStore(db)
-			if err := positionStore.InitTables(); err != nil {
-				t.Fatalf("Failed to initialize position tables: %v", err)
+			if err := ec.Schema.Create(context.Background()); err != nil {
+				t.Fatalf("Failed to create schema: %v", err)
 			}
+
+			positionStore := store.NewPositionStore()
+			positionStore.SetEntClient(ec)
 
 			posBuilder := store.NewPositionBuilder(positionStore)
 
@@ -201,17 +208,16 @@ func TestAllExchangesStandardScenarios(t *testing.T) {
 
 // TestPositionAccumulationBug tests that positions don't accumulate incorrectly
 func TestPositionAccumulationBug(t *testing.T) {
-	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Silent),
-	})
+	ec, err := ent.Open("sqlite3", "file:ent?mode=memory&cache=private&_pragma=foreign_keys(1)")
 	if err != nil {
 		t.Fatalf("Failed to create test database: %v", err)
 	}
-
-	positionStore := store.NewPositionStore(db)
-	if err := positionStore.InitTables(); err != nil {
-		t.Fatalf("Failed to initialize position tables: %v", err)
+	if err := ec.Schema.Create(context.Background()); err != nil {
+		t.Fatalf("Failed to create schema: %v", err)
 	}
+
+	positionStore := store.NewPositionStore()
+	positionStore.SetEntClient(ec)
 
 	posBuilder := store.NewPositionBuilder(positionStore)
 
@@ -286,17 +292,16 @@ func TestPositionAccumulationBug(t *testing.T) {
 
 // TestQuantityPrecision tests handling of quantity precision issues
 func TestQuantityPrecision(t *testing.T) {
-	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Silent),
-	})
+	ec, err := ent.Open("sqlite3", "file:ent?mode=memory&cache=private&_pragma=foreign_keys(1)")
 	if err != nil {
 		t.Fatalf("Failed to create test database: %v", err)
 	}
-
-	positionStore := store.NewPositionStore(db)
-	if err := positionStore.InitTables(); err != nil {
-		t.Fatalf("Failed to initialize position tables: %v", err)
+	if err := ec.Schema.Create(context.Background()); err != nil {
+		t.Fatalf("Failed to create schema: %v", err)
 	}
+
+	positionStore := store.NewPositionStore()
+	positionStore.SetEntClient(ec)
 
 	posBuilder := store.NewPositionBuilder(positionStore)
 

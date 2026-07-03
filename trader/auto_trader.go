@@ -1,6 +1,7 @@
 package trader
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -313,7 +314,7 @@ func NewAutoTrader(config AutoTraderConfig, st *store.Store, userID string) (*Au
 			logger.Infof("✓ [%s] Auto-fetched initial balance: %.2f USDT", config.Name, foundBalance)
 			// Save to database so it persists across restarts
 			if st != nil {
-				if err := st.Trader().UpdateInitialBalance(userID, config.ID, foundBalance); err != nil {
+				if err := st.Trader().UpdateInitialBalance(context.Background(), userID, config.ID, foundBalance); err != nil {
 					logger.Infof("⚠️  [%s] Failed to save initial balance to database: %v", config.Name, err)
 				} else {
 					logger.Infof("✓ [%s] Initial balance saved to database", config.Name)

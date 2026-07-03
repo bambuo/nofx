@@ -1,39 +1,40 @@
 package store
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"time"
 
-	"gorm.io/gorm"
+	"nofx/ent"
+	entdecision "nofx/ent/decisionrecord"
+	entposition "nofx/ent/traderposition"
 )
 
 // DecisionStore decision log storage
 type DecisionStore struct {
-	db *gorm.DB
+	ec *ent.Client
 }
 
 // DecisionRecordDB internal GORM model for decision_records table
 type DecisionRecordDB struct {
-	ID                  int64     `gorm:"primaryKey;autoIncrement"`
-	TraderID            string    `gorm:"column:trader_id;not null;index:idx_decision_records_trader_time"`
-	CycleNumber         int       `gorm:"column:cycle_number;not null"`
-	Timestamp           time.Time `gorm:"not null;index:idx_decision_records_trader_time,sort:desc;index:idx_decision_records_timestamp,sort:desc"`
-	SystemPrompt        string    `gorm:"column:system_prompt;default:''"`
-	InputPrompt         string    `gorm:"column:input_prompt;default:''"`
-	CoTTrace            string    `gorm:"column:cot_trace;default:''"`
-	DecisionJSON        string    `gorm:"column:decision_json;default:''"`
-	RawResponse         string    `gorm:"column:raw_response;default:''"`
-	CandidateCoins      string    `gorm:"column:candidate_coins;default:''"`
-	ExecutionLog        string    `gorm:"column:execution_log;default:''"`
-	Decisions           string    `gorm:"column:decisions;default:'[]'"`
-	Success             bool      `gorm:"default:false"`
-	ErrorMessage        string    `gorm:"column:error_message;default:''"`
-	AIRequestDurationMs int64     `gorm:"column:ai_request_duration_ms;default:0"`
+	ID                  int64     `json:"id"`
+	TraderID            string    `json:"trader_id"`
+	CycleNumber         int       `json:"cycle_number"`
+	Timestamp           time.Time `json:"timestamp"`
+	SystemPrompt        string    `json:"system_prompt"`
+	InputPrompt         string    `json:"input_prompt"`
+	CoTTrace            string    `json:"cot_trace"`
+	DecisionJSON        string    `json:"decision_json"`
+	RawResponse         string    `json:"raw_response"`
+	CandidateCoins      string    `json:"candidate_coins"`
+	ExecutionLog        string    `json:"execution_log"`
+	Decisions           string    `json:"decisions"`
+	Success             bool      `json:"success"`
+	ErrorMessage        string    `json:"error_message"`
+	AIRequestDurationMs int64     `json:"ai_request_duration_ms"`
 	CreatedAt           time.Time `json:"created_at"`
 }
-
-func (DecisionRecordDB) TableName() string { return "decision_records" }
 
 // DecisionRecord decision record (external API struct)
 type DecisionRecord struct {
@@ -105,21 +106,13 @@ type Statistics struct {
 }
 
 // NewDecisionStore creates a new DecisionStore
-func NewDecisionStore(db *gorm.DB) *DecisionStore {
-	return &DecisionStore{db: db}
+func NewDecisionStore() *DecisionStore {
+	return &DecisionStore{}
 }
 
 // initTables initializes AI decision log tables
 func (s *DecisionStore) initTables() error {
-	// For PostgreSQL with existing table, skip AutoMigrate
-	if s.db.Dialector.Name() == "postgres" {
-		var tableExists int64
-		s.db.Raw(`SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'decision_records'`).Scan(&tableExists)
-		if tableExists > 0 {
-			return nil
-		}
-	}
-	return s.db.AutoMigrate(&DecisionRecordDB{})
+	return nil
 }
 
 // toRecord converts DB model to API struct
@@ -144,170 +137,212 @@ func (db *DecisionRecordDB) toRecord() *DecisionRecord {
 	return record
 }
 
+// fromEntDecisionRecord converts ent.DecisionRecord to store.DecisionRecordDB
+func fromEntDecisionRecord(ed *ent.DecisionRecord) *DecisionRecordDB {
+	if ed == nil {
+		return nil
+	}
+	return &DecisionRecordDB{
+		ID:                  ed.ID,
+		TraderID:            ed.TraderID,
+		CycleNumber:         ed.CycleNumber,
+		Timestamp:           ed.Timestamp,
+		SystemPrompt:        ed.SystemPrompt,
+		InputPrompt:         ed.InputPrompt,
+		CoTTrace:            ed.CotTrace,
+		DecisionJSON:        ed.DecisionJSON,
+		RawResponse:         ed.RawResponse,
+		CandidateCoins:      ed.CandidateCoins,
+		ExecutionLog:        ed.ExecutionLog,
+		Decisions:           ed.Decisions,
+		Success:             ed.Success,
+		ErrorMessage:        ed.ErrorMessage,
+		AIRequestDurationMs: ed.AiRequestDurationMs,
+		CreatedAt:           ed.CreatedAt,
+	}
+}
+
 // LogDecision logs decision
 func (s *DecisionStore) LogDecision(record *DecisionRecord) error {
+	ctx := context.Background()
 	if record.Timestamp.IsZero() {
 		record.Timestamp = time.Now().UTC()
 	} else {
 		record.Timestamp = record.Timestamp.UTC()
 	}
 
-	// Serialize arrays to JSON
 	candidateCoinsJSON, _ := json.Marshal(record.CandidateCoins)
 	executionLogJSON, _ := json.Marshal(record.ExecutionLog)
 	decisionsJSON, _ := json.Marshal(record.Decisions)
 
-	dbRecord := &DecisionRecordDB{
-		TraderID:            record.TraderID,
-		CycleNumber:         record.CycleNumber,
-		Timestamp:           record.Timestamp,
-		SystemPrompt:        record.SystemPrompt,
-		InputPrompt:         record.InputPrompt,
-		CoTTrace:            record.CoTTrace,
-		DecisionJSON:        record.DecisionJSON,
-		RawResponse:         record.RawResponse,
-		CandidateCoins:      string(candidateCoinsJSON),
-		ExecutionLog:        string(executionLogJSON),
-		Decisions:           string(decisionsJSON),
-		Success:             record.Success,
-		ErrorMessage:        record.ErrorMessage,
-		AIRequestDurationMs: record.AIRequestDurationMs,
-	}
-
-	if err := s.db.Create(dbRecord).Error; err != nil {
+	created, err := s.ec.DecisionRecord.Create().
+		SetTraderID(record.TraderID).
+		SetCycleNumber(record.CycleNumber).
+		SetTimestamp(record.Timestamp).
+		SetSystemPrompt(record.SystemPrompt).
+		SetInputPrompt(record.InputPrompt).
+		SetCotTrace(record.CoTTrace).
+		SetDecisionJSON(record.DecisionJSON).
+		SetRawResponse(record.RawResponse).
+		SetCandidateCoins(string(candidateCoinsJSON)).
+		SetExecutionLog(string(executionLogJSON)).
+		SetDecisions(string(decisionsJSON)).
+		SetSuccess(record.Success).
+		SetErrorMessage(record.ErrorMessage).
+		SetAiRequestDurationMs(record.AIRequestDurationMs).
+		Save(ctx)
+	if err != nil {
 		return fmt.Errorf("failed to insert decision record: %w", err)
 	}
-	record.ID = dbRecord.ID
+	record.ID = created.ID
 	return nil
 }
 
 // GetLatestRecords gets the latest N records for specified trader (sorted by time in ascending order: old to new)
 func (s *DecisionStore) GetLatestRecords(traderID string, n int) ([]*DecisionRecord, error) {
-	var dbRecords []*DecisionRecordDB
-	err := s.db.Where("trader_id = ?", traderID).
-		Order("timestamp DESC").
+	ctx := context.Background()
+	dbRecords, err := s.ec.DecisionRecord.Query().
+		Where(entdecision.TraderID(traderID)).
+		Order(ent.Desc(entdecision.FieldTimestamp)).
 		Limit(n).
-		Find(&dbRecords).Error
+		All(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query decision records: %w", err)
 	}
-
 	records := make([]*DecisionRecord, len(dbRecords))
 	for i, db := range dbRecords {
-		records[i] = db.toRecord()
+		records[len(dbRecords)-1-i] = fromEntDecisionRecord(db).toRecord()
 	}
-
-	// Reverse array to sort time from old to new
-	for i, j := 0, len(records)-1; i < j; i, j = i+1, j-1 {
-		records[i], records[j] = records[j], records[i]
-	}
-
 	return records, nil
 }
 
 // GetAllLatestRecords gets the latest N records for all traders
 func (s *DecisionStore) GetAllLatestRecords(n int) ([]*DecisionRecord, error) {
-	var dbRecords []*DecisionRecordDB
-	err := s.db.Order("timestamp DESC").Limit(n).Find(&dbRecords).Error
+	ctx := context.Background()
+	dbRecords, err := s.ec.DecisionRecord.Query().
+		Order(ent.Desc(entdecision.FieldTimestamp)).
+		Limit(n).
+		All(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query decision records: %w", err)
 	}
-
 	records := make([]*DecisionRecord, len(dbRecords))
 	for i, db := range dbRecords {
-		records[i] = db.toRecord()
+		records[len(dbRecords)-1-i] = fromEntDecisionRecord(db).toRecord()
 	}
-
-	// Reverse array
-	for i, j := 0, len(records)-1; i < j; i, j = i+1, j-1 {
-		records[i], records[j] = records[j], records[i]
-	}
-
 	return records, nil
 }
 
 // GetRecordsByDate gets all records for a specified trader on a specified date
 func (s *DecisionStore) GetRecordsByDate(traderID string, date time.Time) ([]*DecisionRecord, error) {
-	dateStr := date.Format("2006-01-02")
-
-	var dbRecords []*DecisionRecordDB
-	err := s.db.Where("trader_id = ? AND DATE(timestamp) = ?", traderID, dateStr).
-		Order("timestamp ASC").
-		Find(&dbRecords).Error
+	ctx := context.Background()
+	startOfDay := time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, time.UTC)
+	endOfDay := startOfDay.Add(24 * time.Hour)
+	dbRecords, err := s.ec.DecisionRecord.Query().
+		Where(
+			entdecision.TraderID(traderID),
+			entdecision.TimestampGTE(startOfDay),
+			entdecision.TimestampLT(endOfDay),
+		).
+		Order(ent.Asc(entdecision.FieldTimestamp)).
+		All(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query decision records: %w", err)
 	}
-
 	records := make([]*DecisionRecord, len(dbRecords))
 	for i, db := range dbRecords {
-		records[i] = db.toRecord()
+		records[i] = fromEntDecisionRecord(db).toRecord()
 	}
-
 	return records, nil
 }
 
 // CleanOldRecords cleans old records from N days ago
 func (s *DecisionStore) CleanOldRecords(traderID string, days int) (int64, error) {
+	ctx := context.Background()
 	cutoffTime := time.Now().AddDate(0, 0, -days)
-
-	result := s.db.Where("trader_id = ? AND timestamp < ?", traderID, cutoffTime).
-		Delete(&DecisionRecordDB{})
-	if result.Error != nil {
-		return 0, fmt.Errorf("failed to clean old records: %w", result.Error)
+	n, err := s.ec.DecisionRecord.Delete().
+		Where(entdecision.TraderID(traderID), entdecision.TimestampLT(cutoffTime)).
+		Exec(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("failed to clean old records: %w", err)
 	}
-	return result.RowsAffected, nil
+	return int64(n), nil
 }
 
 // GetStatistics gets statistics information for specified trader
 func (s *DecisionStore) GetStatistics(traderID string) (*Statistics, error) {
+	ctx := context.Background()
 	stats := &Statistics{}
 
-	var totalCount, successCount int64
-	s.db.Model(&DecisionRecordDB{}).Where("trader_id = ?", traderID).Count(&totalCount)
-	s.db.Model(&DecisionRecordDB{}).Where("trader_id = ? AND success = ?", traderID, true).Count(&successCount)
+	totalCount, err := s.ec.DecisionRecord.Query().Where(entdecision.TraderID(traderID)).Count(ctx)
+	if err != nil {
+		return nil, err
+	}
+	successCount, err := s.ec.DecisionRecord.Query().Where(entdecision.TraderID(traderID), entdecision.Success(true)).Count(ctx)
+	if err != nil {
+		return nil, err
+	}
 
-	stats.TotalCycles = int(totalCount)
-	stats.SuccessfulCycles = int(successCount)
-	stats.FailedCycles = stats.TotalCycles - stats.SuccessfulCycles
+	stats.TotalCycles = totalCount
+	stats.SuccessfulCycles = successCount
+	stats.FailedCycles = totalCount - successCount
 
-	// Count from trader_positions table using raw query for cross-table
-	s.db.Raw("SELECT COUNT(*) FROM trader_positions WHERE trader_id = ?", traderID).Scan(&stats.TotalOpenPositions)
-	s.db.Raw("SELECT COUNT(*) FROM trader_positions WHERE trader_id = ? AND status = 'CLOSED'", traderID).Scan(&stats.TotalClosePositions)
+	// Count from trader_positions table
+	openCount, err := s.ec.TraderPosition.Query().Where(entposition.TraderID(traderID)).Count(ctx)
+	if err == nil {
+		stats.TotalOpenPositions = openCount
+	}
+	closedCount, err := s.ec.TraderPosition.Query().Where(entposition.TraderID(traderID), entposition.Status("CLOSED")).Count(ctx)
+	if err == nil {
+		stats.TotalClosePositions = closedCount
+	}
 
 	return stats, nil
 }
 
 // GetAllStatistics gets statistics information for all traders
 func (s *DecisionStore) GetAllStatistics() (*Statistics, error) {
+	ctx := context.Background()
 	stats := &Statistics{}
 
-	var totalCount, successCount int64
-	s.db.Model(&DecisionRecordDB{}).Count(&totalCount)
-	s.db.Model(&DecisionRecordDB{}).Where("success = ?", true).Count(&successCount)
+	totalCount, err := s.ec.DecisionRecord.Query().Count(ctx)
+	if err != nil {
+		return nil, err
+	}
+	successCount, err := s.ec.DecisionRecord.Query().Where(entdecision.Success(true)).Count(ctx)
+	if err != nil {
+		return nil, err
+	}
 
-	stats.TotalCycles = int(totalCount)
-	stats.SuccessfulCycles = int(successCount)
-	stats.FailedCycles = stats.TotalCycles - stats.SuccessfulCycles
+	stats.TotalCycles = totalCount
+	stats.SuccessfulCycles = successCount
+	stats.FailedCycles = totalCount - successCount
 
 	// Count from trader_positions table
-	s.db.Raw("SELECT COUNT(*) FROM trader_positions").Scan(&stats.TotalOpenPositions)
-	s.db.Raw("SELECT COUNT(*) FROM trader_positions WHERE status = 'CLOSED'").Scan(&stats.TotalClosePositions)
+	openCount, err := s.ec.TraderPosition.Query().Count(ctx)
+	if err == nil {
+		stats.TotalOpenPositions = openCount
+	}
+	closedCount, err := s.ec.TraderPosition.Query().Where(entposition.Status("CLOSED")).Count(ctx)
+	if err == nil {
+		stats.TotalClosePositions = closedCount
+	}
 
 	return stats, nil
 }
 
 // GetLastCycleNumber gets the last cycle number for specified trader
 func (s *DecisionStore) GetLastCycleNumber(traderID string) (int, error) {
-	var cycleNumber *int
-	err := s.db.Model(&DecisionRecordDB{}).
-		Where("trader_id = ?", traderID).
-		Select("MAX(cycle_number)").
-		Scan(&cycleNumber).Error
+	ctx := context.Background()
+	record, err := s.ec.DecisionRecord.Query().
+		Where(entdecision.TraderID(traderID)).
+		Order(ent.Desc(entdecision.FieldCycleNumber)).
+		First(ctx)
 	if err != nil {
+		if ent.IsNotFound(err) {
+			return 0, nil
+		}
 		return 0, err
 	}
-	if cycleNumber == nil {
-		return 0, nil
-	}
-	return *cycleNumber, nil
+	return record.CycleNumber, nil
 }

@@ -1,15 +1,22 @@
 package hyperliquid
 
 import (
+	"context"
+	"database/sql"
 	"math"
+	"nofx/ent"
 	"nofx/store"
 	"testing"
 	"time"
 
-	"gorm.io/driver/sqlite"
-	"gorm.io/gorm"
-	"gorm.io/gorm/logger"
+	sqlite3 "modernc.org/sqlite"
 )
+
+func init() {
+	// ent expects the driver to be registered as "sqlite3",
+	// but modernc.org/sqlite registers as "sqlite"
+	sql.Register("sqlite3", &sqlite3.Driver{})
+}
 
 // TestHyperliquidOrderDirectionParsing tests Dir field parsing
 func TestHyperliquidOrderDirectionParsing(t *testing.T) {
@@ -76,18 +83,17 @@ func TestHyperliquidOrderDirectionParsing(t *testing.T) {
 // TestHyperliquidPositionBuilding tests the complete flow of position building
 func TestHyperliquidPositionBuilding(t *testing.T) {
 	// Setup in-memory database
-	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Silent),
-	})
+	ec, err := ent.Open("sqlite3", "file:ent_pos_building?mode=memory&cache=shared&_pragma=foreign_keys(1)")
 	if err != nil {
 		t.Fatalf("Failed to create test database: %v", err)
 	}
+	if err := ec.Schema.Create(context.Background()); err != nil {
+		t.Fatalf("Failed to create schema: %v", err)
+	}
 
 	// Initialize stores
-	positionStore := store.NewPositionStore(db)
-	if err := positionStore.InitTables(); err != nil {
-		t.Fatalf("Failed to initialize position tables: %v", err)
-	}
+	positionStore := store.NewPositionStore()
+	positionStore.SetEntClient(ec)
 
 	posBuilder := store.NewPositionBuilder(positionStore)
 
@@ -143,7 +149,9 @@ func TestHyperliquidPositionBuilding(t *testing.T) {
 	})
 
 	// Clear positions for next test
-	db.Exec("DELETE FROM trader_positions")
+	if err := positionStore.ClearAllPositions(); err != nil {
+		t.Fatalf("Failed to clear positions: %v", err)
+	}
 
 	// Test Case 2: Open Short → Close Short with BUY (the bug scenario!)
 	t.Run("Open Short then Close with BUY", func(t *testing.T) {
@@ -196,7 +204,9 @@ func TestHyperliquidPositionBuilding(t *testing.T) {
 	})
 
 	// Clear positions
-	db.Exec("DELETE FROM trader_positions")
+	if err := positionStore.ClearAllPositions(); err != nil {
+		t.Fatalf("Failed to clear positions: %v", err)
+	}
 
 	// Test Case 3: Position Averaging (Open → Add → Close)
 	t.Run("Position Averaging", func(t *testing.T) {
@@ -260,7 +270,9 @@ func TestHyperliquidPositionBuilding(t *testing.T) {
 	})
 
 	// Clear positions
-	db.Exec("DELETE FROM trader_positions")
+	if err := positionStore.ClearAllPositions(); err != nil {
+		t.Fatalf("Failed to clear positions: %v", err)
+	}
 
 	// Test Case 4: Partial Close
 	t.Run("Partial Close", func(t *testing.T) {
@@ -306,17 +318,16 @@ func TestHyperliquidPositionBuilding(t *testing.T) {
 // TestHyperliquidBugScenario tests the exact bug we fixed
 func TestHyperliquidBugScenario(t *testing.T) {
 	// Setup database
-	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Silent),
-	})
+	ec, err := ent.Open("sqlite3", "file:ent_bug_scenario?mode=memory&cache=shared&_pragma=foreign_keys(1)")
 	if err != nil {
 		t.Fatalf("Failed to create test database: %v", err)
 	}
-
-	positionStore := store.NewPositionStore(db)
-	if err := positionStore.InitTables(); err != nil {
-		t.Fatalf("Failed to initialize position tables: %v", err)
+	if err := ec.Schema.Create(context.Background()); err != nil {
+		t.Fatalf("Failed to create schema: %v", err)
 	}
+
+	positionStore := store.NewPositionStore()
+	positionStore.SetEntClient(ec)
 
 	posBuilder := store.NewPositionBuilder(positionStore)
 

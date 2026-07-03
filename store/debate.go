@@ -1,11 +1,16 @@
 package store
 
 import (
+	"context"
 	"encoding/json"
 	"time"
 
 	"github.com/google/uuid"
-	"gorm.io/gorm"
+	"nofx/ent"
+	entdebateparticipant "nofx/ent/debateparticipant"
+	entdebatemessage "nofx/ent/debatemessage"
+	entdebatesession "nofx/ent/debatesession"
+	entdebatevote "nofx/ent/debatevote"
 )
 
 // DebateStatus represents the status of a debate session
@@ -91,30 +96,26 @@ type DebateSession struct {
 	UpdatedAt       time.Time `json:"updated_at"`
 }
 
-// DebateSessionDB is the GORM model for debate_sessions
+// DebateSessionDB is the DB model for debate_sessions
 type DebateSessionDB struct {
-	ID              string       `gorm:"column:id;primaryKey"`
-	UserID          string       `gorm:"column:user_id;not null;index"`
-	Name            string       `gorm:"column:name;not null"`
-	StrategyID      string       `gorm:"column:strategy_id;not null"`
-	Status          DebateStatus `gorm:"column:status;not null;default:pending;index"`
-	Symbol          string       `gorm:"column:symbol;not null"`
-	MaxRounds       int          `gorm:"column:max_rounds;default:3"`
-	CurrentRound    int          `gorm:"column:current_round;default:0"`
-	IntervalMinutes int          `gorm:"column:interval_minutes;default:5"`
-	PromptVariant   string       `gorm:"column:prompt_variant;default:balanced"`
-	FinalDecision   string       `gorm:"column:final_decision"` // JSON string
-	AutoExecute     bool         `gorm:"column:auto_execute;default:false"`
-	TraderID        string       `gorm:"column:trader_id"`
-	EnableOIRanking bool         `gorm:"column:enable_oi_ranking;default:false"`
-	OIRankingLimit  int          `gorm:"column:oi_ranking_limit;default:10"`
-	OIDuration      string       `gorm:"column:oi_duration;default:1h"`
-	CreatedAt       time.Time    `gorm:"column:created_at;autoCreateTime"`
-	UpdatedAt       time.Time    `gorm:"column:updated_at;autoUpdateTime"`
-}
-
-func (DebateSessionDB) TableName() string {
-	return "debate_sessions"
+	ID              string       `json:"id"`
+	UserID          string       `json:"user_id"`
+	Name            string       `json:"name"`
+	StrategyID      string       `json:"strategy_id"`
+	Status          DebateStatus `json:"status"`
+	Symbol          string       `json:"symbol"`
+	MaxRounds       int          `json:"max_rounds"`
+	CurrentRound    int          `json:"current_round"`
+	IntervalMinutes int          `json:"interval_minutes"`
+	PromptVariant   string       `json:"prompt_variant"`
+	FinalDecision   string       `json:"final_decision,omitempty"` // JSON string
+	AutoExecute     bool         `json:"auto_execute"`
+	TraderID        string       `json:"trader_id,omitempty"`
+	EnableOIRanking bool         `json:"enable_oi_ranking"`
+	OIRankingLimit  int          `json:"oi_ranking_limit"`
+	OIDuration      string       `json:"oi_duration"`
+	CreatedAt       time.Time    `json:"created_at"`
+	UpdatedAt       time.Time    `json:"updated_at"`
 }
 
 func (db *DebateSessionDB) toSession() *DebateSession {
@@ -165,83 +166,149 @@ func (db *DebateSessionDB) toSession() *DebateSession {
 
 // DebateParticipant represents an AI participant in a debate
 type DebateParticipant struct {
-	ID          string            `gorm:"column:id;primaryKey" json:"id"`
-	SessionID   string            `gorm:"column:session_id;not null;index" json:"session_id"`
-	AIModelID   string            `gorm:"column:ai_model_id;not null" json:"ai_model_id"`
-	AIModelName string            `gorm:"column:ai_model_name;not null" json:"ai_model_name"`
-	Provider    string            `gorm:"column:provider;not null" json:"provider"`
-	Personality DebatePersonality `gorm:"column:personality;not null" json:"personality"`
-	Color       string            `gorm:"column:color;not null" json:"color"`
-	SpeakOrder  int               `gorm:"column:speak_order;default:0" json:"speak_order"`
-	CreatedAt   time.Time         `gorm:"column:created_at;autoCreateTime" json:"created_at"`
-}
-
-func (DebateParticipant) TableName() string {
-	return "debate_participants"
+	ID          string            `json:"id"`
+	SessionID   string            `json:"session_id"`
+	AIModelID   string            `json:"ai_model_id"`
+	AIModelName string            `json:"ai_model_name"`
+	Provider    string            `json:"provider"`
+	Personality DebatePersonality `json:"personality"`
+	Color       string            `json:"color"`
+	SpeakOrder  int               `json:"speak_order"`
+	CreatedAt   time.Time         `json:"created_at"`
 }
 
 // DebateMessage represents a message in the debate
 type DebateMessage struct {
-	ID          string            `gorm:"column:id;primaryKey" json:"id"`
-	SessionID   string            `gorm:"column:session_id;not null;index" json:"session_id"`
-	Round       int               `gorm:"column:round;not null" json:"round"`
-	AIModelID   string            `gorm:"column:ai_model_id;not null" json:"ai_model_id"`
-	AIModelName string            `gorm:"column:ai_model_name;not null" json:"ai_model_name"`
-	Provider    string            `gorm:"column:provider;not null" json:"provider"`
-	Personality DebatePersonality `gorm:"column:personality;not null" json:"personality"`
-	MessageType string            `gorm:"column:message_type;not null" json:"message_type"` // analysis/rebuttal/final/vote
-	Content     string            `gorm:"column:content;not null" json:"content"`
-	DecisionRaw string            `gorm:"column:decision" json:"-"`                       // JSON string in DB
-	Decision    *DebateDecision   `gorm:"-" json:"decision,omitempty"`                    // Parsed for API
-	Decisions   []*DebateDecision `gorm:"-" json:"decisions,omitempty"`                   // Multi-coin decisions
-	Confidence  int               `gorm:"column:confidence;default:0" json:"confidence"`
-	CreatedAt   time.Time         `gorm:"column:created_at;autoCreateTime" json:"created_at"`
-}
-
-func (DebateMessage) TableName() string {
-	return "debate_messages"
+	ID          string            `json:"id"`
+	SessionID   string            `json:"session_id"`
+	Round       int               `json:"round"`
+	AIModelID   string            `json:"ai_model_id"`
+	AIModelName string            `json:"ai_model_name"`
+	Provider    string            `json:"provider"`
+	Personality DebatePersonality `json:"personality"`
+	MessageType string            `json:"message_type"` // analysis/rebuttal/final/vote
+	Content     string            `json:"content"`
+	DecisionRaw string            `json:"-"`                       // JSON string in DB
+	Decision    *DebateDecision   `json:"decision,omitempty"`      // Parsed for API
+	Decisions   []*DebateDecision `json:"decisions,omitempty"`     // Multi-coin decisions
+	Confidence  int               `json:"confidence"`
+	CreatedAt   time.Time         `json:"created_at"`
 }
 
 // DebateVote represents a final vote from an AI (can contain multiple coin decisions)
 type DebateVote struct {
-	ID            string            `gorm:"column:id;primaryKey" json:"id"`
-	SessionID     string            `gorm:"column:session_id;not null;index" json:"session_id"`
-	AIModelID     string            `gorm:"column:ai_model_id;not null" json:"ai_model_id"`
-	AIModelName   string            `gorm:"column:ai_model_name;not null" json:"ai_model_name"`
-	Action        string            `gorm:"column:action;not null" json:"action"`   // Primary action (backward compat)
-	Symbol        string            `gorm:"column:symbol;not null" json:"symbol"`   // Primary symbol (backward compat)
-	Confidence    int               `gorm:"column:confidence;default:0" json:"confidence"`
-	Leverage      int               `gorm:"column:leverage;default:5" json:"leverage"`
-	PositionPct   float64           `gorm:"column:position_pct;default:0.2" json:"position_pct"`
-	StopLossPct   float64           `gorm:"column:stop_loss_pct;default:0.03" json:"stop_loss_pct"`
-	TakeProfitPct float64           `gorm:"column:take_profit_pct;default:0.06" json:"take_profit_pct"`
-	Reasoning     string            `gorm:"column:reasoning" json:"reasoning"`
-	Decisions     []*DebateDecision `gorm:"-" json:"decisions,omitempty"` // Multi-coin decisions
-	CreatedAt     time.Time         `gorm:"column:created_at;autoCreateTime" json:"created_at"`
+	ID            string            `json:"id"`
+	SessionID     string            `json:"session_id"`
+	AIModelID     string            `json:"ai_model_id"`
+	AIModelName   string            `json:"ai_model_name"`
+	Action        string            `json:"action"`   // Primary action (backward compat)
+	Symbol        string            `json:"symbol"`   // Primary symbol (backward compat)
+	Confidence    int               `json:"confidence"`
+	Leverage      int               `json:"leverage"`
+	PositionPct   float64           `json:"position_pct"`
+	StopLossPct   float64           `json:"stop_loss_pct"`
+	TakeProfitPct float64           `json:"take_profit_pct"`
+	Reasoning     string            `json:"reasoning"`
+	Decisions     []*DebateDecision `json:"decisions,omitempty"` // Multi-coin decisions
+	CreatedAt     time.Time         `json:"created_at"`
 }
 
-func (DebateVote) TableName() string {
-	return "debate_votes"
+// ==================== Ent Conversion Functions ====================
+
+// fromEntDebateSession converts ent.DebateSession to store.DebateSessionDB
+func fromEntDebateSession(s *ent.DebateSession) DebateSessionDB {
+	return DebateSessionDB{
+		ID:              s.ID,
+		UserID:          s.UserID,
+		Name:            s.Name,
+		StrategyID:      s.StrategyID,
+		Status:          DebateStatus(s.Status),
+		Symbol:          s.Symbol,
+		MaxRounds:       s.MaxRounds,
+		CurrentRound:    s.CurrentRound,
+		IntervalMinutes: s.IntervalMinutes,
+		PromptVariant:   s.PromptVariant,
+		FinalDecision:   s.FinalDecision,
+		AutoExecute:     s.AutoExecute,
+		TraderID:        s.TraderID,
+		EnableOIRanking: s.EnableOiRanking,
+		OIRankingLimit:  s.OiRankingLimit,
+		OIDuration:      s.OiDuration,
+		CreatedAt:       s.CreatedAt,
+		UpdatedAt:       s.UpdatedAt,
+	}
 }
 
-// DebateStore handles database operations for debates
+// fromEntDebateParticipant converts ent.DebateParticipant to store.DebateParticipant
+func fromEntDebateParticipant(p *ent.DebateParticipant) DebateParticipant {
+	return DebateParticipant{
+		ID:          p.ID,
+		SessionID:   p.SessionID,
+		AIModelID:   p.AiModelID,
+		AIModelName: p.AiModelName,
+		Provider:    p.Provider,
+		Personality: DebatePersonality(p.Personality),
+		Color:       p.Color,
+		SpeakOrder:  p.SpeakOrder,
+		CreatedAt:   p.CreatedAt,
+	}
+}
+
+// fromEntDebateMessage converts ent.DebateMessage to store.DebateMessage
+func fromEntDebateMessage(m *ent.DebateMessage) DebateMessage {
+	return DebateMessage{
+		ID:          m.ID,
+		SessionID:   m.SessionID,
+		Round:       m.Round,
+		AIModelID:   m.AiModelID,
+		AIModelName: m.AiModelName,
+		Provider:    m.Provider,
+		Personality: DebatePersonality(m.Personality),
+		MessageType: m.MessageType,
+		Content:     m.Content,
+		DecisionRaw: m.DecisionRaw,
+		Confidence:  m.Confidence,
+		CreatedAt:   m.CreatedAt,
+	}
+}
+
+// fromEntDebateVote converts ent.DebateVote to store.DebateVote
+func fromEntDebateVote(v *ent.DebateVote) DebateVote {
+	return DebateVote{
+		ID:            v.ID,
+		SessionID:     v.SessionID,
+		AIModelID:     v.AiModelID,
+		AIModelName:   v.AiModelName,
+		Action:        v.Action,
+		Symbol:        v.Symbol,
+		Confidence:    v.Confidence,
+		Leverage:      v.Leverage,
+		PositionPct:   v.PositionPct,
+		StopLossPct:   v.StopLossPct,
+		TakeProfitPct: v.TakeProfitPct,
+		Reasoning:     v.Reasoning,
+		CreatedAt:     v.CreatedAt,
+	}
+}
+
+// ==================== Debate Store ====================
 type DebateStore struct {
-	db *gorm.DB
+	ec *ent.Client
 }
 
 // NewDebateStore creates a new DebateStore
-func NewDebateStore(db *gorm.DB) *DebateStore {
-	return &DebateStore{db: db}
+func NewDebateStore() *DebateStore {
+	return &DebateStore{}
 }
 
-// InitSchema creates the debate tables using GORM AutoMigrate
+// SetEntClient sets the ent client for this debate store
+func (s *DebateStore) SetEntClient(ec *ent.Client) {
+	s.ec = ec
+}
+
+// InitSchema creates the debate tables
 func (s *DebateStore) InitSchema() error {
-	return s.db.AutoMigrate(
-		&DebateSessionDB{},
-		&DebateParticipant{},
-		&DebateMessage{},
-		&DebateVote{},
-	)
+	return nil
 }
 
 // CreateSession creates a new debate session
@@ -264,72 +331,100 @@ func (s *DebateStore) CreateSession(session *DebateSession) error {
 		session.OIDuration = "1h"
 	}
 
-	db := &DebateSessionDB{
-		ID:              session.ID,
-		UserID:          session.UserID,
-		Name:            session.Name,
-		StrategyID:      session.StrategyID,
-		Status:          session.Status,
-		Symbol:          session.Symbol,
-		MaxRounds:       session.MaxRounds,
-		CurrentRound:    session.CurrentRound,
-		IntervalMinutes: session.IntervalMinutes,
-		PromptVariant:   session.PromptVariant,
-		AutoExecute:     session.AutoExecute,
-		TraderID:        session.TraderID,
-		EnableOIRanking: session.EnableOIRanking,
-		OIRankingLimit:  session.OIRankingLimit,
-		OIDuration:      session.OIDuration,
+	var finalDecision string
+	if session.FinalDecision != nil {
+		data, err := json.Marshal(session.FinalDecision)
+		if err != nil {
+			return err
+		}
+		finalDecision = string(data)
 	}
 
-	return s.db.Create(db).Error
+	ctx := context.Background()
+	_, err := s.ec.DebateSession.Create().
+		SetID(session.ID).
+		SetUserID(session.UserID).
+		SetName(session.Name).
+		SetStrategyID(session.StrategyID).
+		SetStatus(string(session.Status)).
+		SetSymbol(session.Symbol).
+		SetMaxRounds(session.MaxRounds).
+		SetCurrentRound(session.CurrentRound).
+		SetIntervalMinutes(session.IntervalMinutes).
+		SetPromptVariant(session.PromptVariant).
+		SetFinalDecision(finalDecision).
+		SetAutoExecute(session.AutoExecute).
+		SetTraderID(session.TraderID).
+		SetEnableOiRanking(session.EnableOIRanking).
+		SetOiRankingLimit(session.OIRankingLimit).
+		SetOiDuration(session.OIDuration).
+		Save(ctx)
+	return err
 }
 
 // GetSession gets a debate session by ID
 func (s *DebateStore) GetSession(id string) (*DebateSession, error) {
-	var db DebateSessionDB
-	if err := s.db.Where("id = ?", id).First(&db).Error; err != nil {
+	ctx := context.Background()
+	db, err := s.ec.DebateSession.Query().
+		Where(entdebatesession.ID(id)).
+		First(ctx)
+	if err != nil {
 		return nil, err
 	}
-	return db.toSession(), nil
+	dbRecord := fromEntDebateSession(db)
+	return dbRecord.toSession(), nil
 }
 
 // GetSessionsByUser gets all debate sessions for a user
 func (s *DebateStore) GetSessionsByUser(userID string) ([]*DebateSession, error) {
-	var dbs []DebateSessionDB
-	if err := s.db.Where("user_id = ?", userID).Order("created_at DESC").Find(&dbs).Error; err != nil {
+	ctx := context.Background()
+	dbs, err := s.ec.DebateSession.Query().
+		Where(entdebatesession.UserID(userID)).
+		Order(ent.Desc(entdebatesession.FieldCreatedAt)).
+		All(ctx)
+	if err != nil {
 		return nil, err
 	}
 
 	sessions := make([]*DebateSession, len(dbs))
 	for i, db := range dbs {
-		sessions[i] = db.toSession()
+		dbRecord := fromEntDebateSession(db)
+		sessions[i] = dbRecord.toSession()
 	}
 	return sessions, nil
 }
 
 // ListAllSessions returns all debate sessions (for cleanup on startup)
 func (s *DebateStore) ListAllSessions() ([]*DebateSession, error) {
-	var dbs []DebateSessionDB
-	if err := s.db.Select("id, status").Find(&dbs).Error; err != nil {
+	ctx := context.Background()
+	dbs, err := s.ec.DebateSession.Query().
+		Select(entdebatesession.FieldID, entdebatesession.FieldStatus).
+		All(ctx)
+	if err != nil {
 		return nil, err
 	}
 
 	sessions := make([]*DebateSession, len(dbs))
 	for i, db := range dbs {
-		sessions[i] = &DebateSession{ID: db.ID, Status: db.Status}
+		sessions[i] = &DebateSession{ID: db.ID, Status: DebateStatus(db.Status)}
 	}
 	return sessions, nil
 }
 
 // UpdateSessionStatus updates the status of a debate session
 func (s *DebateStore) UpdateSessionStatus(id string, status DebateStatus) error {
-	return s.db.Model(&DebateSessionDB{}).Where("id = ?", id).Update("status", status).Error
+	ctx := context.Background()
+	return s.ec.DebateSession.UpdateOneID(id).
+		SetStatus(string(status)).
+		Exec(ctx)
 }
 
 // UpdateSessionRound updates the current round of a debate session
 func (s *DebateStore) UpdateSessionRound(id string, round int) error {
-	return s.db.Model(&DebateSessionDB{}).Where("id = ?", id).Update("current_round", round).Error
+	ctx := context.Background()
+	return s.ec.DebateSession.UpdateOneID(id).
+		SetCurrentRound(round).
+		Exec(ctx)
 }
 
 // UpdateSessionFinalDecision updates the final decision of a debate session (single decision)
@@ -338,10 +433,11 @@ func (s *DebateStore) UpdateSessionFinalDecision(id string, decision *DebateDeci
 	if err != nil {
 		return err
 	}
-	return s.db.Model(&DebateSessionDB{}).Where("id = ?", id).Updates(map[string]interface{}{
-		"final_decision": string(decisionJSON),
-		"status":         DebateStatusCompleted,
-	}).Error
+	ctx := context.Background()
+	return s.ec.DebateSession.UpdateOneID(id).
+		SetFinalDecision(string(decisionJSON)).
+		SetStatus(string(DebateStatusCompleted)).
+		Exec(ctx)
 }
 
 // UpdateSessionFinalDecisions updates both single and multi-coin final decisions
@@ -350,19 +446,21 @@ func (s *DebateStore) UpdateSessionFinalDecisions(id string, primaryDecision *De
 	if err != nil {
 		return err
 	}
-	return s.db.Model(&DebateSessionDB{}).Where("id = ?", id).Updates(map[string]interface{}{
-		"final_decision": string(primaryJSON),
-		"status":         DebateStatusCompleted,
-	}).Error
+	ctx := context.Background()
+	return s.ec.DebateSession.UpdateOneID(id).
+		SetFinalDecision(string(primaryJSON)).
+		SetStatus(string(DebateStatusCompleted)).
+		Exec(ctx)
 }
 
 // DeleteSession deletes a debate session and all related data
 func (s *DebateStore) DeleteSession(id string) error {
+	ctx := context.Background()
 	// Delete related data first
-	s.db.Where("session_id = ?", id).Delete(&DebateParticipant{})
-	s.db.Where("session_id = ?", id).Delete(&DebateMessage{})
-	s.db.Where("session_id = ?", id).Delete(&DebateVote{})
-	return s.db.Where("id = ?", id).Delete(&DebateSessionDB{}).Error
+	s.ec.DebateParticipant.Delete().Where(entdebateparticipant.SessionID(id)).Exec(ctx)
+	s.ec.DebateMessage.Delete().Where(entdebatemessage.SessionID(id)).Exec(ctx)
+	s.ec.DebateVote.Delete().Where(entdebatevote.SessionID(id)).Exec(ctx)
+	return s.ec.DebateSession.DeleteOneID(id).Exec(ctx)
 }
 
 // AddParticipant adds a participant to a debate session
@@ -377,14 +475,37 @@ func (s *DebateStore) AddParticipant(participant *DebateParticipant) error {
 			participant.Color = "#6B7280" // Default gray
 		}
 	}
-	return s.db.Create(participant).Error
+	ctx := context.Background()
+	_, err := s.ec.DebateParticipant.Create().
+		SetID(participant.ID).
+		SetSessionID(participant.SessionID).
+		SetAiModelID(participant.AIModelID).
+		SetAiModelName(participant.AIModelName).
+		SetProvider(participant.Provider).
+		SetPersonality(string(participant.Personality)).
+		SetColor(participant.Color).
+		SetSpeakOrder(participant.SpeakOrder).
+		Save(ctx)
+	return err
 }
 
 // GetParticipants gets all participants for a debate session
 func (s *DebateStore) GetParticipants(sessionID string) ([]*DebateParticipant, error) {
-	var participants []*DebateParticipant
-	err := s.db.Where("session_id = ?", sessionID).Order("speak_order").Find(&participants).Error
-	return participants, err
+	ctx := context.Background()
+	participants, err := s.ec.DebateParticipant.Query().
+		Where(entdebateparticipant.SessionID(sessionID)).
+		Order(ent.Asc(entdebateparticipant.FieldSpeakOrder)).
+		All(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]*DebateParticipant, len(participants))
+	for i, p := range participants {
+		converted := fromEntDebateParticipant(p)
+		result[i] = &converted
+	}
+	return result, nil
 }
 
 // AddMessage adds a message to a debate session
@@ -399,47 +520,76 @@ func (s *DebateStore) AddMessage(msg *DebateMessage) error {
 		}
 		msg.DecisionRaw = string(data)
 	}
-	return s.db.Create(msg).Error
+	ctx := context.Background()
+	_, err := s.ec.DebateMessage.Create().
+		SetID(msg.ID).
+		SetSessionID(msg.SessionID).
+		SetRound(msg.Round).
+		SetAiModelID(msg.AIModelID).
+		SetAiModelName(msg.AIModelName).
+		SetProvider(msg.Provider).
+		SetPersonality(string(msg.Personality)).
+		SetMessageType(msg.MessageType).
+		SetContent(msg.Content).
+		SetDecisionRaw(msg.DecisionRaw).
+		SetConfidence(msg.Confidence).
+		Save(ctx)
+	return err
 }
 
 // GetMessages gets all messages for a debate session
 func (s *DebateStore) GetMessages(sessionID string) ([]*DebateMessage, error) {
-	var messages []*DebateMessage
-	err := s.db.Where("session_id = ?", sessionID).Order("round, created_at").Find(&messages).Error
+	ctx := context.Background()
+	messages, err := s.ec.DebateMessage.Query().
+		Where(entdebatemessage.SessionID(sessionID)).
+		Order(ent.Asc(entdebatemessage.FieldRound), ent.Asc(entdebatemessage.FieldCreatedAt)).
+		All(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	// Parse decision JSON
-	for _, msg := range messages {
-		if msg.DecisionRaw != "" {
+	result := make([]*DebateMessage, len(messages))
+	for i, msg := range messages {
+		converted := fromEntDebateMessage(msg)
+		// Parse decision JSON
+		if converted.DecisionRaw != "" {
 			var decision DebateDecision
-			if json.Unmarshal([]byte(msg.DecisionRaw), &decision) == nil {
-				msg.Decision = &decision
+			if json.Unmarshal([]byte(converted.DecisionRaw), &decision) == nil {
+				converted.Decision = &decision
 			}
 		}
+		result[i] = &converted
 	}
-	return messages, nil
+	return result, nil
 }
 
 // GetMessagesByRound gets messages for a specific round
 func (s *DebateStore) GetMessagesByRound(sessionID string, round int) ([]*DebateMessage, error) {
-	var messages []*DebateMessage
-	err := s.db.Where("session_id = ? AND round = ?", sessionID, round).Order("created_at").Find(&messages).Error
+	ctx := context.Background()
+	messages, err := s.ec.DebateMessage.Query().
+		Where(
+			entdebatemessage.SessionID(sessionID),
+			entdebatemessage.Round(round),
+		).
+		Order(ent.Asc(entdebatemessage.FieldCreatedAt)).
+		All(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	// Parse decision JSON
-	for _, msg := range messages {
-		if msg.DecisionRaw != "" {
+	result := make([]*DebateMessage, len(messages))
+	for i, msg := range messages {
+		converted := fromEntDebateMessage(msg)
+		// Parse decision JSON
+		if converted.DecisionRaw != "" {
 			var decision DebateDecision
-			if json.Unmarshal([]byte(msg.DecisionRaw), &decision) == nil {
-				msg.Decision = &decision
+			if json.Unmarshal([]byte(converted.DecisionRaw), &decision) == nil {
+				converted.Decision = &decision
 			}
 		}
+		result[i] = &converted
 	}
-	return messages, nil
+	return result, nil
 }
 
 // AddVote adds a vote to a debate session
@@ -447,14 +597,41 @@ func (s *DebateStore) AddVote(vote *DebateVote) error {
 	if vote.ID == "" {
 		vote.ID = uuid.New().String()
 	}
-	return s.db.Create(vote).Error
+	ctx := context.Background()
+	_, err := s.ec.DebateVote.Create().
+		SetID(vote.ID).
+		SetSessionID(vote.SessionID).
+		SetAiModelID(vote.AIModelID).
+		SetAiModelName(vote.AIModelName).
+		SetAction(vote.Action).
+		SetSymbol(vote.Symbol).
+		SetConfidence(vote.Confidence).
+		SetLeverage(vote.Leverage).
+		SetPositionPct(vote.PositionPct).
+		SetStopLossPct(vote.StopLossPct).
+		SetTakeProfitPct(vote.TakeProfitPct).
+		SetReasoning(vote.Reasoning).
+		Save(ctx)
+	return err
 }
 
 // GetVotes gets all votes for a debate session
 func (s *DebateStore) GetVotes(sessionID string) ([]*DebateVote, error) {
-	var votes []*DebateVote
-	err := s.db.Where("session_id = ?", sessionID).Order("created_at").Find(&votes).Error
-	return votes, err
+	ctx := context.Background()
+	votes, err := s.ec.DebateVote.Query().
+		Where(entdebatevote.SessionID(sessionID)).
+		Order(ent.Asc(entdebatevote.FieldCreatedAt)).
+		All(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]*DebateVote, len(votes))
+	for i, v := range votes {
+		converted := fromEntDebateVote(v)
+		result[i] = &converted
+	}
+	return result, nil
 }
 
 // DebateSessionWithDetails combines session with participants and messages

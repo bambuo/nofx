@@ -124,3 +124,8 @@ dmypy.json
 # Pyre type checker
 .pyre/
 PR_DESCRIPTION.md
+
+ent/*
+!ent/schema/
+!ent/generate.go
+!ent/nofx.go

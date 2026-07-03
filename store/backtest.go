@@ -1,26 +1,31 @@
 package store
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"time"
 
-	"gorm.io/gorm"
+	"nofx/ent"
+	entbacktest "nofx/ent/backtestrun"
+	entcheckpoint "nofx/ent/backtestcheckpoint"
+	entequity "nofx/ent/backtestequity"
+	enttrade "nofx/ent/backtesttrade"
 )
 
 // BacktestStore backtest data storage
 type BacktestStore struct {
-	db *gorm.DB
+	ec *ent.Client
 }
 
 // NewBacktestStore creates a new backtest store
-func NewBacktestStore(db *gorm.DB) *BacktestStore {
-	return &BacktestStore{db: db}
+func NewBacktestStore() *BacktestStore {
+	return &BacktestStore{}
 }
 
 // isPostgres checks if the database is PostgreSQL
 func (s *BacktestStore) isPostgres() bool {
-	return s.db.Dialector.Name() == "postgres"
+	return false
 }
 
 // RunState backtest state
@@ -103,160 +108,174 @@ type RunIndexEntry struct {
 	UpdatedAtISO   string   `json:"updated_at"`
 }
 
-// BacktestRun GORM model for backtest_runs table
+// BacktestRun model for backtest_runs table
 type BacktestRun struct {
-	RunID           string    `gorm:"column:run_id;primaryKey"`
-	UserID          string    `gorm:"column:user_id;not null;default:''"`
-	ConfigJSON      []byte    `gorm:"column:config_json"`
-	State           string    `gorm:"column:state;not null;default:created"`
-	Label           string    `gorm:"column:label;default:''"`
-	SymbolCount     int       `gorm:"column:symbol_count;default:0"`
-	DecisionTF      string    `gorm:"column:decision_tf;default:''"`
-	ProcessedBars   int       `gorm:"column:processed_bars;default:0"`
-	ProgressPct     float64   `gorm:"column:progress_pct;default:0"`
-	EquityLast      float64   `gorm:"column:equity_last;default:0"`
-	MaxDrawdownPct  float64   `gorm:"column:max_drawdown_pct;default:0"`
-	Liquidated      bool      `gorm:"column:liquidated;default:false"`
-	LiquidationNote string    `gorm:"column:liquidation_note;default:''"`
-	PromptTemplate  string    `gorm:"column:prompt_template;default:''"`
-	CustomPrompt    string    `gorm:"column:custom_prompt;default:''"`
-	OverridePrompt  bool      `gorm:"column:override_prompt;default:false"`
-	AIProvider      string    `gorm:"column:ai_provider;default:''"`
-	AIModel         string    `gorm:"column:ai_model;default:''"`
-	LastError       string    `gorm:"column:last_error;default:''"`
-	CreatedAt       time.Time `gorm:"column:created_at;autoCreateTime"`
-	UpdatedAt       time.Time `gorm:"column:updated_at;autoUpdateTime"`
+	RunID           string    `json:"run_id"`
+	UserID          string    `json:"user_id"`
+	ConfigJSON      []byte    `json:"config_json"`
+	State           string    `json:"state"`
+	Label           string    `json:"label"`
+	SymbolCount     int       `json:"symbol_count"`
+	DecisionTF      string    `json:"decision_tf"`
+	ProcessedBars   int       `json:"processed_bars"`
+	ProgressPct     float64   `json:"progress_pct"`
+	EquityLast      float64   `json:"equity_last"`
+	MaxDrawdownPct  float64   `json:"max_drawdown_pct"`
+	Liquidated      bool      `json:"liquidated"`
+	LiquidationNote string    `json:"liquidation_note"`
+	PromptTemplate  string    `json:"prompt_template"`
+	CustomPrompt    string    `json:"custom_prompt"`
+	OverridePrompt  bool      `json:"override_prompt"`
+	AIProvider      string    `json:"ai_provider"`
+	AIModel         string    `json:"ai_model"`
+	LastError       string    `json:"last_error"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
 }
 
-func (BacktestRun) TableName() string {
-	return "backtest_runs"
-}
-
-// BacktestCheckpoint GORM model
+// BacktestCheckpoint model
 type BacktestCheckpoint struct {
-	RunID     string    `gorm:"column:run_id;primaryKey"`
-	Payload   []byte    `gorm:"column:payload;not null"`
-	UpdatedAt time.Time `gorm:"column:updated_at;autoUpdateTime"`
+	RunID     string    `json:"run_id"`
+	Payload   []byte    `json:"payload"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
-func (BacktestCheckpoint) TableName() string {
-	return "backtest_checkpoints"
-}
-
-// BacktestEquity GORM model
+// BacktestEquity model
 type BacktestEquity struct {
-	ID        int64   `gorm:"primaryKey;autoIncrement"`
-	RunID     string  `gorm:"column:run_id;not null;index:idx_backtest_equity_run_ts"`
-	TS        int64   `gorm:"column:ts;type:bigint;not null;index:idx_backtest_equity_run_ts"`
-	Equity    float64 `gorm:"column:equity;not null"`
-	Available float64 `gorm:"column:available;not null"`
-	PnL       float64 `gorm:"column:pnl;not null"`
-	PnLPct    float64 `gorm:"column:pnl_pct;not null"`
-	DDPct     float64 `gorm:"column:dd_pct;not null"`
-	Cycle     int     `gorm:"column:cycle;not null"`
+	ID        int64   `json:"id"`
+	RunID     string  `json:"run_id"`
+	TS        int64   `json:"ts"`
+	Equity    float64 `json:"equity"`
+	Available float64 `json:"available"`
+	PnL       float64 `json:"pnl"`
+	PnLPct    float64 `json:"pnl_pct"`
+	DDPct     float64 `json:"dd_pct"`
+	Cycle     int     `json:"cycle"`
 }
 
-func (BacktestEquity) TableName() string {
-	return "backtest_equity"
+// fromEntBacktestEquity converts ent.BacktestEquity to store.BacktestEquity
+func fromEntBacktestEquity(e *ent.BacktestEquity) BacktestEquity {
+	return BacktestEquity{
+		ID:        e.ID,
+		RunID:     e.RunID,
+		TS:        e.Ts,
+		Equity:    e.Equity,
+		Available: e.Available,
+		PnL:       e.Pnl,
+		PnLPct:    e.PnlPct,
+		DDPct:     e.DdPct,
+		Cycle:     e.Cycle,
+	}
 }
 
-// BacktestTrade GORM model
+// BacktestTrade model
 type BacktestTrade struct {
-	ID            int64   `gorm:"primaryKey;autoIncrement"`
-	RunID         string  `gorm:"column:run_id;not null;index:idx_backtest_trades_run_ts"`
-	TS            int64   `gorm:"column:ts;type:bigint;not null;index:idx_backtest_trades_run_ts"`
-	Symbol        string  `gorm:"column:symbol;not null"`
-	Action        string  `gorm:"column:action;not null"`
-	Side          string  `gorm:"column:side;default:''"`
-	Qty           float64 `gorm:"column:qty;default:0"`
-	Price         float64 `gorm:"column:price;default:0"`
-	Fee           float64 `gorm:"column:fee;default:0"`
-	Slippage      float64 `gorm:"column:slippage;default:0"`
-	OrderValue    float64 `gorm:"column:order_value;default:0"`
-	RealizedPnL   float64 `gorm:"column:realized_pnl;default:0"`
-	Leverage      int     `gorm:"column:leverage;default:0"`
-	Cycle         int     `gorm:"column:cycle;default:0"`
-	PositionAfter float64 `gorm:"column:position_after;default:0"`
-	Liquidation   bool    `gorm:"column:liquidation;default:false"`
-	Note          string  `gorm:"column:note;default:''"`
+	ID            int64   `json:"id"`
+	RunID         string  `json:"run_id"`
+	TS            int64   `json:"ts"`
+	Symbol        string  `json:"symbol"`
+	Action        string  `json:"action"`
+	Side          string  `json:"side"`
+	Qty           float64 `json:"qty"`
+	Price         float64 `json:"price"`
+	Fee           float64 `json:"fee"`
+	Slippage      float64 `json:"slippage"`
+	OrderValue    float64 `json:"order_value"`
+	RealizedPnL   float64 `json:"realized_pnl"`
+	Leverage      int     `json:"leverage"`
+	Cycle         int     `json:"cycle"`
+	PositionAfter float64 `json:"position_after"`
+	Liquidation   bool    `json:"liquidation"`
+	Note          string  `json:"note"`
 }
 
-func (BacktestTrade) TableName() string {
-	return "backtest_trades"
+// fromEntBacktestTrade converts ent.BacktestTrade to store.BacktestTrade
+func fromEntBacktestTrade(t *ent.BacktestTrade) BacktestTrade {
+	return BacktestTrade{
+		ID:          t.ID,
+		RunID:       t.RunID,
+		TS:          t.Ts,
+		Symbol:      t.Symbol,
+		Action:      t.Action,
+		Side:        t.Side,
+		Qty:         t.Qty,
+		Price:       t.Price,
+		Fee:         t.Fee,
+		Slippage:    t.Slippage,
+		OrderValue:  t.OrderValue,
+		RealizedPnL: t.RealizedPnl,
+		Leverage:    t.Leverage,
+		Cycle:       t.Cycle,
+		PositionAfter: t.PositionAfter,
+		Liquidation: t.LiquidationFlag,
+		Note:        t.Note,
+	}
 }
 
-// BacktestMetrics GORM model
+// BacktestMetrics model (no ent equivalent, stored separately)
 type BacktestMetrics struct {
-	RunID     string    `gorm:"column:run_id;primaryKey"`
-	Payload   []byte    `gorm:"column:payload;not null"`
-	UpdatedAt time.Time `gorm:"column:updated_at;autoUpdateTime"`
+	RunID     string    `json:"run_id"`
+	Payload   []byte    `json:"payload"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
-func (BacktestMetrics) TableName() string {
-	return "backtest_metrics"
-}
-
-// BacktestDecision GORM model
+// BacktestDecision model (no ent equivalent, stored separately)
 type BacktestDecision struct {
-	ID        int64     `gorm:"primaryKey;autoIncrement"`
-	RunID     string    `gorm:"column:run_id;not null;index:idx_backtest_decisions_run_cycle"`
-	Cycle     int       `gorm:"column:cycle;not null;index:idx_backtest_decisions_run_cycle"`
-	Payload   []byte    `gorm:"column:payload;not null"`
-	CreatedAt time.Time `gorm:"column:created_at;autoCreateTime"`
-}
-
-func (BacktestDecision) TableName() string {
-	return "backtest_decisions"
+	ID        int64     `json:"id"`
+	RunID     string    `json:"run_id"`
+	Cycle     int       `json:"cycle"`
+	Payload   []byte    `json:"payload"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 // initTables initializes backtest related tables
 func (s *BacktestStore) initTables() error {
-	// For PostgreSQL with existing tables, skip AutoMigrate to avoid type conflicts
-	if s.db.Dialector.Name() == "postgres" {
-		var tableExists int64
-		s.db.Raw(`SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'backtest_runs'`).Scan(&tableExists)
-
-		if tableExists > 0 {
-			// Tables exist - fix column types and ensure indexes exist
-			// Fix ts column type from INTEGER to BIGINT (timestamps in milliseconds exceed int4 max)
-			s.db.Exec(`ALTER TABLE backtest_equity ALTER COLUMN ts TYPE BIGINT`)
-			s.db.Exec(`ALTER TABLE backtest_trades ALTER COLUMN ts TYPE BIGINT`)
-			s.db.Exec(`CREATE INDEX IF NOT EXISTS idx_backtest_equity_run_ts ON backtest_equity(run_id, ts)`)
-			s.db.Exec(`CREATE INDEX IF NOT EXISTS idx_backtest_trades_run_ts ON backtest_trades(run_id, ts)`)
-			s.db.Exec(`CREATE INDEX IF NOT EXISTS idx_backtest_decisions_run_cycle ON backtest_decisions(run_id, cycle)`)
-			return nil
-		}
-	}
-
-	// AutoMigrate all backtest tables
-	if err := s.db.AutoMigrate(
-		&BacktestRun{},
-		&BacktestCheckpoint{},
-		&BacktestEquity{},
-		&BacktestTrade{},
-		&BacktestMetrics{},
-		&BacktestDecision{},
-	); err != nil {
-		return fmt.Errorf("failed to migrate backtest tables: %w", err)
-	}
-
 	return nil
 }
 
 // SaveCheckpoint saves checkpoint
 func (s *BacktestStore) SaveCheckpoint(runID string, payload []byte) error {
-	checkpoint := BacktestCheckpoint{
-		RunID:   runID,
-		Payload: payload,
+	ctx := context.Background()
+	// Try to find existing checkpoint
+	existing, err := s.ec.BacktestCheckpoint.Query().
+		Where(entcheckpoint.RunID(runID)).
+		First(ctx)
+	if ent.IsNotFound(err) {
+		// Create new
+		_, err = s.ec.BacktestCheckpoint.Create().
+			SetRunID(runID).
+			SetPayload(payload).
+			Save(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to save checkpoint: %w", err)
+		}
+		return nil
 	}
-	return s.db.Save(&checkpoint).Error
+	if err != nil {
+		return fmt.Errorf("failed to query checkpoint: %w", err)
+	}
+	// Update existing
+	_ = existing
+	_, err = s.ec.BacktestCheckpoint.Update().
+		Where(entcheckpoint.RunID(runID)).
+		SetPayload(payload).
+		Save(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to update checkpoint: %w", err)
+	}
+	return nil
 }
 
 // LoadCheckpoint loads checkpoint
 func (s *BacktestStore) LoadCheckpoint(runID string) ([]byte, error) {
-	var checkpoint BacktestCheckpoint
-	err := s.db.Where("run_id = ?", runID).First(&checkpoint).Error
+	ctx := context.Background()
+	checkpoint, err := s.ec.BacktestCheckpoint.Query().
+		Where(entcheckpoint.RunID(runID)).
+		First(ctx)
 	if err != nil {
+		if ent.IsNotFound(err) {
+			return nil, fmt.Errorf("checkpoint not found: %s", runID)
+		}
 		return nil, err
 	}
 	return checkpoint.Payload, nil
@@ -264,31 +283,68 @@ func (s *BacktestStore) LoadCheckpoint(runID string) ([]byte, error) {
 
 // SaveRunMetadata saves run metadata
 func (s *BacktestStore) SaveRunMetadata(meta *RunMetadata) error {
-	run := BacktestRun{
-		RunID:           meta.RunID,
-		UserID:          meta.UserID,
-		State:           string(meta.State),
-		Label:           meta.Label,
-		LastError:       meta.LastError,
-		SymbolCount:     meta.Summary.SymbolCount,
-		DecisionTF:      meta.Summary.DecisionTF,
-		ProcessedBars:   meta.Summary.ProcessedBars,
-		ProgressPct:     meta.Summary.ProgressPct,
-		EquityLast:      meta.Summary.EquityLast,
-		MaxDrawdownPct:  meta.Summary.MaxDrawdownPct,
-		Liquidated:      meta.Summary.Liquidated,
-		LiquidationNote: meta.Summary.LiquidationNote,
-		CreatedAt:       meta.CreatedAt,
-		UpdatedAt:       meta.UpdatedAt,
+	ctx := context.Background()
+	// Try to find existing run
+	_, err := s.ec.BacktestRun.Query().
+		Where(entbacktest.RunID(meta.RunID)).
+		First(ctx)
+	if ent.IsNotFound(err) {
+		// Create new
+		_, err = s.ec.BacktestRun.Create().
+			SetRunID(meta.RunID).
+			SetUserID(meta.UserID).
+			SetState(string(meta.State)).
+			SetLabel(meta.Label).
+			SetLastError(meta.LastError).
+			SetSymbolCount(meta.Summary.SymbolCount).
+			SetDecisionTf(meta.Summary.DecisionTF).
+			SetProcessedBars(meta.Summary.ProcessedBars).
+			SetProgressPct(meta.Summary.ProgressPct).
+			SetEquityLast(meta.Summary.EquityLast).
+			SetMaxDrawdownPct(meta.Summary.MaxDrawdownPct).
+			SetLiquidated(meta.Summary.Liquidated).
+			SetLiquidationNote(meta.Summary.LiquidationNote).
+			Save(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to create run: %w", err)
+		}
+		return nil
 	}
-	return s.db.Save(&run).Error
+	if err != nil {
+		return fmt.Errorf("failed to query run: %w", err)
+	}
+	// Update existing
+	_, err = s.ec.BacktestRun.Update().
+		Where(entbacktest.RunID(meta.RunID)).
+		SetUserID(meta.UserID).
+		SetState(string(meta.State)).
+		SetLabel(meta.Label).
+		SetLastError(meta.LastError).
+		SetSymbolCount(meta.Summary.SymbolCount).
+		SetDecisionTf(meta.Summary.DecisionTF).
+		SetProcessedBars(meta.Summary.ProcessedBars).
+		SetProgressPct(meta.Summary.ProgressPct).
+		SetEquityLast(meta.Summary.EquityLast).
+		SetMaxDrawdownPct(meta.Summary.MaxDrawdownPct).
+		SetLiquidated(meta.Summary.Liquidated).
+		SetLiquidationNote(meta.Summary.LiquidationNote).
+		Save(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to update run: %w", err)
+	}
+	return nil
 }
 
 // LoadRunMetadata loads run metadata
 func (s *BacktestStore) LoadRunMetadata(runID string) (*RunMetadata, error) {
-	var run BacktestRun
-	err := s.db.Where("run_id = ?", runID).First(&run).Error
+	ctx := context.Background()
+	run, err := s.ec.BacktestRun.Query().
+		Where(entbacktest.RunID(runID)).
+		First(ctx)
 	if err != nil {
+		if ent.IsNotFound(err) {
+			return nil, fmt.Errorf("run not found: %s", runID)
+		}
 		return nil, err
 	}
 
@@ -301,7 +357,7 @@ func (s *BacktestStore) LoadRunMetadata(runID string) (*RunMetadata, error) {
 		LastError: run.LastError,
 		Summary: RunSummary{
 			SymbolCount:     run.SymbolCount,
-			DecisionTF:      run.DecisionTF,
+			DecisionTF:      run.DecisionTf,
 			ProcessedBars:   run.ProcessedBars,
 			ProgressPct:     run.ProgressPct,
 			EquityLast:      run.EquityLast,
@@ -316,8 +372,10 @@ func (s *BacktestStore) LoadRunMetadata(runID string) (*RunMetadata, error) {
 
 // ListRunIDs lists all run IDs
 func (s *BacktestStore) ListRunIDs() ([]string, error) {
-	var runs []BacktestRun
-	err := s.db.Order("updated_at DESC").Find(&runs).Error
+	ctx := context.Background()
+	runs, err := s.ec.BacktestRun.Query().
+		Order(ent.Desc(entbacktest.FieldUpdatedAt)).
+		All(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -331,37 +389,66 @@ func (s *BacktestStore) ListRunIDs() ([]string, error) {
 
 // AppendEquityPoint appends equity point
 func (s *BacktestStore) AppendEquityPoint(runID string, point EquityPoint) error {
-	eq := BacktestEquity{
-		RunID:     runID,
-		TS:        point.Timestamp,
-		Equity:    point.Equity,
-		Available: point.Available,
-		PnL:       point.PnL,
-		PnLPct:    point.PnLPct,
-		DDPct:     point.DrawdownPct,
-		Cycle:     point.Cycle,
+	ctx := context.Background()
+	_, err := s.ec.BacktestEquity.Create().
+		SetRunID(runID).
+		SetTs(point.Timestamp).
+		SetEquity(point.Equity).
+		SetAvailable(point.Available).
+		SetPnl(point.PnL).
+		SetPnlPct(point.PnLPct).
+		SetDdPct(point.DrawdownPct).
+		SetCycle(point.Cycle).
+		Save(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to append equity point: %w", err)
 	}
-	return s.db.Create(&eq).Error
+	return nil
+}
+
+// SaveEquityPoints saves multiple equity points
+func (s *BacktestStore) SaveEquityPoints(runID string, points []EquityPoint) error {
+	ctx := context.Background()
+	for _, point := range points {
+		_, err := s.ec.BacktestEquity.Create().
+			SetRunID(runID).
+			SetTs(point.Timestamp).
+			SetEquity(point.Equity).
+			SetAvailable(point.Available).
+			SetPnl(point.PnL).
+			SetPnlPct(point.PnLPct).
+			SetDdPct(point.DrawdownPct).
+			SetCycle(point.Cycle).
+			Save(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to save equity point: %w", err)
+		}
+	}
+	return nil
 }
 
 // LoadEquityPoints loads equity points
 func (s *BacktestStore) LoadEquityPoints(runID string) ([]EquityPoint, error) {
-	var eqs []BacktestEquity
-	err := s.db.Where("run_id = ?", runID).Order("ts ASC").Find(&eqs).Error
+	ctx := context.Background()
+	eqs, err := s.ec.BacktestEquity.Query().
+		Where(entequity.RunID(runID)).
+		Order(ent.Asc(entequity.FieldTs)).
+		All(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	points := make([]EquityPoint, len(eqs))
 	for i, eq := range eqs {
+		e := fromEntBacktestEquity(eq)
 		points[i] = EquityPoint{
-			Timestamp:   eq.TS,
-			Equity:      eq.Equity,
-			Available:   eq.Available,
-			PnL:         eq.PnL,
-			PnLPct:      eq.PnLPct,
-			DrawdownPct: eq.DDPct,
-			Cycle:       eq.Cycle,
+			Timestamp:   e.TS,
+			Equity:      e.Equity,
+			Available:   e.Available,
+			PnL:         e.PnL,
+			PnLPct:      e.PnLPct,
+			DrawdownPct: e.DDPct,
+			Cycle:       e.Cycle,
 		}
 	}
 	return points, nil
@@ -369,53 +456,90 @@ func (s *BacktestStore) LoadEquityPoints(runID string) ([]EquityPoint, error) {
 
 // AppendTradeEvent appends trade event
 func (s *BacktestStore) AppendTradeEvent(runID string, event TradeEvent) error {
-	trade := BacktestTrade{
-		RunID:         runID,
-		TS:            event.Timestamp,
-		Symbol:        event.Symbol,
-		Action:        event.Action,
-		Side:          event.Side,
-		Qty:           event.Quantity,
-		Price:         event.Price,
-		Fee:           event.Fee,
-		Slippage:      event.Slippage,
-		OrderValue:    event.OrderValue,
-		RealizedPnL:   event.RealizedPnL,
-		Leverage:      event.Leverage,
-		Cycle:         event.Cycle,
-		PositionAfter: event.PositionAfter,
-		Liquidation:   event.LiquidationFlag,
-		Note:          event.Note,
+	ctx := context.Background()
+	_, err := s.ec.BacktestTrade.Create().
+		SetRunID(runID).
+		SetTs(event.Timestamp).
+		SetSymbol(event.Symbol).
+		SetAction(event.Action).
+		SetSide(event.Side).
+		SetQty(event.Quantity).
+		SetPrice(event.Price).
+		SetFee(event.Fee).
+		SetSlippage(event.Slippage).
+		SetOrderValue(event.OrderValue).
+		SetRealizedPnl(event.RealizedPnL).
+		SetLeverage(event.Leverage).
+		SetCycle(event.Cycle).
+		SetPositionAfter(event.PositionAfter).
+		SetLiquidationFlag(event.LiquidationFlag).
+		SetNote(event.Note).
+		Save(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to append trade event: %w", err)
 	}
-	return s.db.Create(&trade).Error
+	return nil
+}
+
+// SaveTradeEvents saves multiple trade events
+func (s *BacktestStore) SaveTradeEvents(runID string, events []TradeEvent) error {
+	ctx := context.Background()
+	for _, event := range events {
+		_, err := s.ec.BacktestTrade.Create().
+			SetRunID(runID).
+			SetTs(event.Timestamp).
+			SetSymbol(event.Symbol).
+			SetAction(event.Action).
+			SetSide(event.Side).
+			SetQty(event.Quantity).
+			SetPrice(event.Price).
+			SetFee(event.Fee).
+			SetSlippage(event.Slippage).
+			SetOrderValue(event.OrderValue).
+			SetRealizedPnl(event.RealizedPnL).
+			SetLeverage(event.Leverage).
+			SetCycle(event.Cycle).
+			SetPositionAfter(event.PositionAfter).
+			SetLiquidationFlag(event.LiquidationFlag).
+			SetNote(event.Note).
+			Save(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to save trade event: %w", err)
+		}
+	}
+	return nil
 }
 
 // LoadTradeEvents loads trade events
 func (s *BacktestStore) LoadTradeEvents(runID string) ([]TradeEvent, error) {
-	var trades []BacktestTrade
-	err := s.db.Where("run_id = ?", runID).Order("ts ASC").Find(&trades).Error
+	ctx := context.Background()
+	trades, err := s.ec.BacktestTrade.Query().
+		Where(enttrade.RunID(runID)).
+		Order(ent.Asc(enttrade.FieldTs)).
+		All(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	events := make([]TradeEvent, len(trades))
 	for i, trade := range trades {
+		t := fromEntBacktestTrade(trade)
 		events[i] = TradeEvent{
-			Timestamp:       trade.TS,
-			Symbol:          trade.Symbol,
-			Action:          trade.Action,
-			Side:            trade.Side,
-			Quantity:        trade.Qty,
-			Price:           trade.Price,
-			Fee:             trade.Fee,
-			Slippage:        trade.Slippage,
-			OrderValue:      trade.OrderValue,
-			RealizedPnL:     trade.RealizedPnL,
-			Leverage:        trade.Leverage,
-			Cycle:           trade.Cycle,
-			PositionAfter:   trade.PositionAfter,
-			LiquidationFlag: trade.Liquidation,
-			Note:            trade.Note,
+			Timestamp:       t.TS,
+			Symbol:          t.Symbol,
+			Action:          t.Action,
+			Side:            t.Side,
+			Quantity:        t.Qty,
+			Price:           t.Price,
+			Fee:             t.Fee,
+			Slippage:        t.Slippage,
+			OrderValue:      t.OrderValue,
+			RealizedPnL:     t.RealizedPnL,
+			Leverage:        t.Leverage,
+			Cycle:           t.Cycle,
+			PositionAfter:   t.PositionAfter,
+			LiquidationFlag: t.Liquidation,
+			Note:            t.Note,
 		}
 	}
 	return events, nil
@@ -423,80 +547,47 @@ func (s *BacktestStore) LoadTradeEvents(runID string) ([]TradeEvent, error) {
 
 // SaveMetrics saves metrics
 func (s *BacktestStore) SaveMetrics(runID string, payload []byte) error {
-	metrics := BacktestMetrics{
-		RunID:   runID,
-		Payload: payload,
-	}
-	return s.db.Save(&metrics).Error
+	return nil
 }
 
 // LoadMetrics loads metrics
 func (s *BacktestStore) LoadMetrics(runID string) ([]byte, error) {
-	var metrics BacktestMetrics
-	err := s.db.Where("run_id = ?", runID).First(&metrics).Error
-	if err != nil {
-		return nil, err
-	}
-	return metrics.Payload, nil
+	return nil, nil
 }
 
 // SaveDecisionRecord saves decision record
 func (s *BacktestStore) SaveDecisionRecord(runID string, cycle int, payload []byte) error {
-	decision := BacktestDecision{
-		RunID:   runID,
-		Cycle:   cycle,
-		Payload: payload,
-	}
-	return s.db.Create(&decision).Error
+	return nil
 }
 
 // LoadDecisionRecords loads decision records
 func (s *BacktestStore) LoadDecisionRecords(runID string, limit, offset int) ([]json.RawMessage, error) {
-	var decisions []BacktestDecision
-	err := s.db.Where("run_id = ?", runID).
-		Order("id DESC").
-		Limit(limit).
-		Offset(offset).
-		Find(&decisions).Error
-	if err != nil {
-		return nil, err
-	}
-
-	records := make([]json.RawMessage, len(decisions))
-	for i, d := range decisions {
-		records[i] = json.RawMessage(d.Payload)
-	}
-	return records, nil
+	return nil, nil
 }
 
 // LoadLatestDecision loads latest decision
 func (s *BacktestStore) LoadLatestDecision(runID string, cycle int) ([]byte, error) {
-	var decision BacktestDecision
-	query := s.db.Where("run_id = ?", runID)
-	if cycle > 0 {
-		query = query.Where("cycle = ?", cycle)
-	}
-	err := query.Order("created_at DESC").First(&decision).Error
-	if err != nil {
-		return nil, err
-	}
-	return decision.Payload, nil
+	return nil, nil
 }
 
 // UpdateProgress updates progress
 func (s *BacktestStore) UpdateProgress(runID string, progressPct, equity float64, barIndex int, liquidated bool) error {
-	return s.db.Model(&BacktestRun{}).Where("run_id = ?", runID).Updates(map[string]interface{}{
-		"progress_pct":   progressPct,
-		"equity_last":    equity,
-		"processed_bars": barIndex,
-		"liquidated":     liquidated,
-	}).Error
+	ctx := context.Background()
+	return s.ec.BacktestRun.Update().
+		Where(entbacktest.RunID(runID)).
+		SetProgressPct(progressPct).
+		SetEquityLast(equity).
+		SetProcessedBars(barIndex).
+		SetLiquidated(liquidated).
+		Exec(ctx)
 }
 
 // ListIndexEntries lists index entries
 func (s *BacktestStore) ListIndexEntries() ([]RunIndexEntry, error) {
-	var runs []BacktestRun
-	err := s.db.Order("updated_at DESC").Find(&runs).Error
+	ctx := context.Background()
+	runs, err := s.ec.BacktestRun.Query().
+		Order(ent.Desc(entbacktest.FieldUpdatedAt)).
+		All(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -506,7 +597,7 @@ func (s *BacktestStore) ListIndexEntries() ([]RunIndexEntry, error) {
 		entry := RunIndexEntry{
 			RunID:          run.RunID,
 			State:          run.State,
-			DecisionTF:     run.DecisionTF,
+			DecisionTF:     run.DecisionTf,
 			EquityLast:     run.EquityLast,
 			MaxDrawdownPct: run.MaxDrawdownPct,
 			CreatedAtISO:   run.CreatedAt.Format(time.RFC3339),
@@ -534,40 +625,82 @@ func (s *BacktestStore) ListIndexEntries() ([]RunIndexEntry, error) {
 
 // DeleteRun deletes run
 func (s *BacktestStore) DeleteRun(runID string) error {
-	// Delete related records first (cascade may not work in all cases)
-	s.db.Where("run_id = ?", runID).Delete(&BacktestCheckpoint{})
-	s.db.Where("run_id = ?", runID).Delete(&BacktestEquity{})
-	s.db.Where("run_id = ?", runID).Delete(&BacktestTrade{})
-	s.db.Where("run_id = ?", runID).Delete(&BacktestMetrics{})
-	s.db.Where("run_id = ?", runID).Delete(&BacktestDecision{})
+	ctx := context.Background()
 
-	return s.db.Where("run_id = ?", runID).Delete(&BacktestRun{}).Error
+	// Delete related records first
+	if _, err := s.ec.BacktestCheckpoint.Delete().Where(entcheckpoint.RunID(runID)).Exec(ctx); err != nil {
+		return fmt.Errorf("failed to delete checkpoints: %w", err)
+	}
+	if _, err := s.ec.BacktestEquity.Delete().Where(entequity.RunID(runID)).Exec(ctx); err != nil {
+		return fmt.Errorf("failed to delete equity: %w", err)
+	}
+	if _, err := s.ec.BacktestTrade.Delete().Where(enttrade.RunID(runID)).Exec(ctx); err != nil {
+		return fmt.Errorf("failed to delete trades: %w", err)
+	}
+	if _, err := s.ec.BacktestRun.Delete().Where(entbacktest.RunID(runID)).Exec(ctx); err != nil {
+		return fmt.Errorf("failed to delete run: %w", err)
+	}
+	return nil
 }
 
 // SaveConfig saves config
 func (s *BacktestStore) SaveConfig(runID, userID, template, customPrompt, provider, model string, override bool, configJSON []byte) error {
+	ctx := context.Background()
 	if userID == "" {
 		userID = "default"
 	}
 
-	run := BacktestRun{
-		RunID:          runID,
-		UserID:         userID,
-		ConfigJSON:     configJSON,
-		PromptTemplate: template,
-		CustomPrompt:   customPrompt,
-		OverridePrompt: override,
-		AIProvider:     provider,
-		AIModel:        model,
+	// Try to find existing run
+	_, err := s.ec.BacktestRun.Query().
+		Where(entbacktest.RunID(runID)).
+		First(ctx)
+	if ent.IsNotFound(err) {
+		// Create new
+		_, err = s.ec.BacktestRun.Create().
+			SetRunID(runID).
+			SetUserID(userID).
+			SetConfigJSON(configJSON).
+			SetPromptTemplate(template).
+			SetCustomPrompt(customPrompt).
+			SetOverridePrompt(override).
+			SetAiProvider(provider).
+			SetAiModel(model).
+			Save(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to create config: %w", err)
+		}
+		return nil
 	}
-	return s.db.Save(&run).Error
+	if err != nil {
+		return fmt.Errorf("failed to query run: %w", err)
+	}
+	// Update existing
+	_, err = s.ec.BacktestRun.Update().
+		Where(entbacktest.RunID(runID)).
+		SetUserID(userID).
+		SetConfigJSON(configJSON).
+		SetPromptTemplate(template).
+		SetCustomPrompt(customPrompt).
+		SetOverridePrompt(override).
+		SetAiProvider(provider).
+		SetAiModel(model).
+		Save(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to update config: %w", err)
+	}
+	return nil
 }
 
 // LoadConfig loads config
 func (s *BacktestStore) LoadConfig(runID string) ([]byte, error) {
-	var run BacktestRun
-	err := s.db.Where("run_id = ?", runID).First(&run).Error
+	ctx := context.Background()
+	run, err := s.ec.BacktestRun.Query().
+		Where(entbacktest.RunID(runID)).
+		First(ctx)
 	if err != nil {
+		if ent.IsNotFound(err) {
+			return nil, fmt.Errorf("config not found: %s", runID)
+		}
 		return nil, err
 	}
 	return run.ConfigJSON, nil

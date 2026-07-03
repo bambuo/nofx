@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"nofx/api"
 	"nofx/auth"
 	"nofx/backtest"
@@ -109,7 +110,7 @@ func main() {
 	}
 
 	// Display loaded trader information
-	traders, err := st.Trader().List("default")
+	traders, err := st.Trader().List(context.Background(), "default")
 	if err != nil {
 		logger.Fatalf("❌ Failed to get trader list: %v", err)
 	}

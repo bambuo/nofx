@@ -1,16 +1,18 @@
 package store
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/base32"
+	"fmt"
+	"nofx/ent"
+	entuser "nofx/ent/user"
 	"time"
-
-	"gorm.io/gorm"
 )
 
 // UserStore user storage
 type UserStore struct {
-	db *gorm.DB
+	ec *ent.Client
 }
 
 // User user model
@@ -26,6 +28,22 @@ type User struct {
 
 func (User) TableName() string { return "users" }
 
+// fromEntUser converts ent.User to store.User
+func fromEntUser(eu *ent.User) *User {
+	if eu == nil {
+		return nil
+	}
+	return &User{
+		ID:           eu.ID,
+		Email:        eu.Email,
+		PasswordHash: eu.PasswordHash,
+		OTPSecret:    eu.OtpSecret,
+		OTPVerified:  eu.OtpVerified,
+		CreatedAt:    eu.CreatedAt,
+		UpdatedAt:    eu.UpdatedAt,
+	}
+}
+
 // GenerateOTPSecret generates OTP secret
 func GenerateOTPSecret() (string, error) {
 	secret := make([]byte, 20)
@@ -37,108 +55,137 @@ func GenerateOTPSecret() (string, error) {
 }
 
 // NewUserStore creates a new UserStore
-func NewUserStore(db *gorm.DB) *UserStore {
-	return &UserStore{db: db}
+func NewUserStore() *UserStore {
+	return &UserStore{}
 }
 
 func (s *UserStore) initTables() error {
-	// For PostgreSQL with existing table, skip AutoMigrate to avoid index conflicts
-	if s.db.Dialector.Name() == "postgres" {
-		var tableExists int64
-		s.db.Raw(`SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'users'`).Scan(&tableExists)
-
-		if tableExists > 0 {
-			// Table exists - manually ensure all columns exist
-			// Core columns (should already exist)
-			s.db.Exec(`ALTER TABLE users ADD COLUMN IF NOT EXISTS email TEXT NOT NULL DEFAULT ''`)
-			s.db.Exec(`ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT NOT NULL DEFAULT ''`)
-			s.db.Exec(`ALTER TABLE users ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP`)
-			s.db.Exec(`ALTER TABLE users ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP`)
-			// OTP columns (added later)
-			s.db.Exec(`ALTER TABLE users ADD COLUMN IF NOT EXISTS otp_secret TEXT DEFAULT ''`)
-			s.db.Exec(`ALTER TABLE users ADD COLUMN IF NOT EXISTS otp_verified BOOLEAN DEFAULT FALSE`)
-
-			// Ensure unique index exists on email (don't care about the name)
-			var indexExists int64
-			s.db.Raw(`
-				SELECT COUNT(*) FROM pg_indexes
-				WHERE tablename = 'users' AND indexdef LIKE '%email%' AND indexdef LIKE '%UNIQUE%'
-			`).Scan(&indexExists)
-
-			if indexExists == 0 {
-				s.db.Exec("CREATE UNIQUE INDEX idx_users_email ON users(email)")
-			}
-
-			return nil
-		}
-	}
-	return s.db.AutoMigrate(&User{})
+	return nil
 }
+
+
 
 // Create creates user
 func (s *UserStore) Create(user *User) error {
-	return s.db.Create(user).Error
+	if s.ec == nil {
+		return fmt.Errorf("ent client not available")
+	}
+	ctx := context.Background()
+	_, err := s.ec.User.Create().
+		SetID(user.ID).
+		SetEmail(user.Email).
+		SetPasswordHash(user.PasswordHash).
+		SetNillableOtpSecret(strPtr(user.OTPSecret)).
+		SetOtpVerified(user.OTPVerified).
+		Save(ctx)
+	return err
 }
 
 // GetByEmail gets user by email
 func (s *UserStore) GetByEmail(email string) (*User, error) {
-	var user User
-	err := s.db.Where("email = ?", email).First(&user).Error
+	if s.ec == nil {
+		return nil, fmt.Errorf("ent client not available")
+	}
+	ctx := context.Background()
+	u, err := s.ec.User.Query().Where(entuser.EmailEQ(email)).Only(ctx)
 	if err != nil {
+		if ent.IsNotFound(err) {
+			return nil, nil
+		}
 		return nil, err
 	}
-	return &user, nil
+	return fromEntUser(u), nil
 }
 
 // GetByID gets user by ID
 func (s *UserStore) GetByID(userID string) (*User, error) {
-	var user User
-	err := s.db.Where("id = ?", userID).First(&user).Error
+	if s.ec == nil {
+		return nil, fmt.Errorf("ent client not available")
+	}
+	ctx := context.Background()
+	u, err := s.ec.User.Get(ctx, userID)
 	if err != nil {
+		if ent.IsNotFound(err) {
+			return nil, nil
+		}
 		return nil, err
 	}
-	return &user, nil
+	return fromEntUser(u), nil
 }
 
 // Count returns the total number of users
 func (s *UserStore) Count() (int, error) {
-	var count int64
-	err := s.db.Model(&User{}).Count(&count).Error
-	return int(count), err
+	if s.ec == nil {
+		return 0, fmt.Errorf("ent client not available")
+	}
+	ctx := context.Background()
+	return s.ec.User.Query().Count(ctx)
 }
 
 // GetAllIDs gets all user IDs
 func (s *UserStore) GetAllIDs() ([]string, error) {
-	var userIDs []string
-	err := s.db.Model(&User{}).Order("id").Pluck("id", &userIDs).Error
-	return userIDs, err
+	if s.ec == nil {
+		return nil, fmt.Errorf("ent client not available")
+	}
+	ctx := context.Background()
+	users, err := s.ec.User.Query().Order(ent.Asc(entuser.FieldID)).All(ctx)
+	if err != nil {
+		return nil, err
+	}
+	ids := make([]string, len(users))
+	for i, u := range users {
+		ids[i] = u.ID
+	}
+	return ids, nil
 }
 
 // UpdateOTPVerified updates OTP verification status
 func (s *UserStore) UpdateOTPVerified(userID string, verified bool) error {
-	return s.db.Model(&User{}).Where("id = ?", userID).Update("otp_verified", verified).Error
+	if s.ec == nil {
+		return fmt.Errorf("ent client not available")
+	}
+	ctx := context.Background()
+	return s.ec.User.UpdateOneID(userID).SetOtpVerified(verified).Exec(ctx)
 }
 
 // UpdatePassword updates password
 func (s *UserStore) UpdatePassword(userID, passwordHash string) error {
-	return s.db.Model(&User{}).Where("id = ?", userID).Updates(map[string]interface{}{
-		"password_hash": passwordHash,
-		"updated_at":    time.Now().UTC(),
-	}).Error
+	if s.ec == nil {
+		return fmt.Errorf("ent client not available")
+	}
+	ctx := context.Background()
+	return s.ec.User.UpdateOneID(userID).
+		SetPasswordHash(passwordHash).
+		SetUpdatedAt(time.Now().UTC()).
+		Exec(ctx)
 }
 
 // EnsureAdmin ensures admin user exists
 func (s *UserStore) EnsureAdmin() error {
-	var count int64
-	s.db.Model(&User{}).Where("id = ?", "admin").Count(&count)
-	if count > 0 {
+	if s.ec == nil {
+		return fmt.Errorf("ent client not available")
+	}
+	ctx := context.Background()
+	exists, err := s.ec.User.Query().Where(entuser.ID("admin")).Exist(ctx)
+	if err != nil {
+		return err
+	}
+	if exists {
 		return nil
 	}
-	return s.Create(&User{
-		ID:           "admin",
-		Email:        "admin@localhost",
-		PasswordHash: "",
-		OTPSecret:    "",
-		OTPVerified:  true,
-	})
+	_, err = s.ec.User.Create().
+		SetID("admin").
+		SetEmail("admin@localhost").
+		SetPasswordHash("").
+		SetOtpVerified(true).
+		Save(ctx)
+	return err
+}
+
+// strPtr returns a pointer to the string, or nil if empty
+func strPtr(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
 }
