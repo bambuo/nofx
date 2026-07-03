@@ -691,12 +691,12 @@ export function AITradersPage({ onTraderSelect }: AITradersPageProps) {
               <h1 className="text-2xl md:text-3xl font-bold font-mono tracking-tight text-nofx-text flex items-center gap-3 uppercase">
                 {t('aiTraders', language)}
                 <span className="text-xs font-mono font-normal px-2 py-0.5 rounded bg-nofx-gold/10 text-nofx-gold border border-nofx-gold/20 tracking-wider">
-                  {traders?.length || 0} ACTIVE_NODES
+                  {traders?.length || 0} {language === 'zh' ? '活跃节点' : language === 'id' ? 'NODE AKTIF' : 'ACTIVE_NODES'}
                 </span>
               </h1>
               <p className="text-xs font-mono text-nofx-text-muted uppercase tracking-widest mt-1 ml-1 flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-nofx-success animate-pulse"></span>
-                SYSTEM_READY
+                {language === 'zh' ? '系统就绪' : language === 'id' ? 'SISTEM SIAP' : 'SYSTEM_READY'}
               </p>
             </div>
           </div>
@@ -708,7 +708,7 @@ export function AITradersPage({ onTraderSelect }: AITradersPageProps) {
             >
               <div className="flex items-center gap-2">
                 <Plus className="w-3 h-3" />
-                <span>MODELS_CONFIG</span>
+                <span>{language === 'zh' ? '模型配置' : language === 'id' ? 'KONFIG MODEL' : 'MODELS_CONFIG'}</span>
               </div>
             </button>
 
@@ -718,7 +718,7 @@ export function AITradersPage({ onTraderSelect }: AITradersPageProps) {
             >
               <div className="flex items-center gap-2">
                 <Plus className="w-3 h-3" />
-                <span>EXCHANGE_KEYS</span>
+                <span>{language === 'zh' ? '交易所密钥' : language === 'id' ? 'KUNCI BURSA' : 'EXCHANGE_KEYS'}</span>
               </div>
             </button>
 
@@ -728,7 +728,7 @@ export function AITradersPage({ onTraderSelect }: AITradersPageProps) {
             >
               <div className="flex items-center gap-2">
                 <MessageCircle className="w-3 h-3" />
-                <span>TELEGRAM_BOT</span>
+                <span>{language === 'zh' ? '电报机器人' : language === 'id' ? 'BOT TELEGRAM' : 'TELEGRAM_BOT'}</span>
               </div>
             </button>
 

@@ -74,27 +74,48 @@ async function copyText(value: string, label: string) {
 
 function BeginnerHyperliquidGuide({
   hasInjectedWallet,
+  language,
 }: {
   hasInjectedWallet: boolean
+  language: string
 }) {
+  const isZh = language === 'zh'
+  const isId = language === 'id'
+  const t = (zh: string, id: string, en: string) =>
+    isZh ? zh : isId ? id : en
+
   const steps = [
     {
-      title: 'Prepare an EVM wallet',
+      title: t('准备 EVM 钱包', 'Siapkan dompet EVM', 'Prepare an EVM wallet'),
       detail: hasInjectedWallet
-        ? 'Wallet extension detected. Unlock it, then connect below.'
-        : 'Install Rabby or MetaMask, create or import a wallet, then return here.',
+        ? t(
+            '检测到钱包扩展程序。解锁后请在下方连接。',
+            'Ekstensi dompet terdeteksi. Buka kunci, lalu hubungkan di bawah.',
+            'Wallet extension detected. Unlock it, then connect below.',
+          )
+        : t(
+            '安装 Rabby 或 MetaMask，创建或导入钱包，然后返回这里。',
+            'Instal Rabby atau MetaMask, buat atau impor dompet, lalu kembali ke sini.',
+            'Install Rabby or MetaMask, create or import a wallet, then return here.',
+          ),
       icon: Wallet,
     },
     {
-      title: 'Open Hyperliquid',
-      detail:
+      title: t('打开 Hyperliquid', 'Buka Hyperliquid', 'Open Hyperliquid'),
+      detail: t(
+        '在 Hyperliquid 上使用同一钱包。存入 USDC 作为交易保证金。',
+        'Gunakan dompet yang sama di Hyperliquid. Setor USDC sebagai jaminan trading.',
         'Use the same wallet on Hyperliquid. Deposit USDC there as trading collateral.',
+      ),
       icon: CircleDollarSign,
     },
     {
-      title: 'Authorize NOFX',
-      detail:
+      title: t('授权 NOFX', 'Otorisasi NOFX', 'Authorize NOFX'),
+      detail: t(
+        '返回 NOFX，批准 Agent 和创建者费用。NOFX 存储 Agent 密钥，而非你的主钱包密钥。',
+        'Kembali ke NOFX, setujui Agen dan biaya builder. NOFX menyimpan kunci Agen, bukan kunci dompet utama Anda.',
         'Back in NOFX, approve the Agent and builder fee. NOFX stores the Agent key, not your main wallet key.',
+      ),
       icon: KeyRound,
     },
   ]
@@ -104,11 +125,14 @@ function BeginnerHyperliquidGuide({
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <div className="text-sm font-semibold text-nofx-text">
-            New to Hyperliquid?
+            {t('Hyperliquid 新手？', 'Baru di Hyperliquid?', 'New to Hyperliquid?')}
           </div>
           <p className="mt-1 text-xs leading-5 text-nofx-text-muted">
-            Start here if you do not have a trading wallet or have never used
-            Hyperliquid before.
+            {t(
+              '如果你还没有交易钱包或从未使用过 Hyperliquid，从这里开始。',
+              'Mulai di sini jika Anda belum memiliki dompet trading atau belum pernah menggunakan Hyperliquid.',
+              'Start here if you do not have a trading wallet or have never used Hyperliquid before.',
+            )}
           </p>
         </div>
         <div
@@ -118,7 +142,9 @@ function BeginnerHyperliquidGuide({
               : 'bg-nofx-gold/10 text-nofx-gold'
           }`}
         >
-          {hasInjectedWallet ? 'Wallet detected' : 'Wallet needed'}
+          {hasInjectedWallet
+            ? t('已检测到钱包', 'Dompet terdeteksi', 'Wallet detected')
+            : t('需要钱包', 'Dompet diperlukan', 'Wallet needed')}
         </div>
       </div>
 
@@ -153,7 +179,7 @@ function BeginnerHyperliquidGuide({
               className="inline-flex items-center gap-2 rounded-lg border border-nofx-gold/20 bg-nofx-bg-deeper px-3 py-2 text-xs font-semibold text-nofx-text hover:border-nofx-gold/40 hover:bg-nofx-bg"
             >
               <Download className="h-3.5 w-3.5" />
-              Install Rabby
+              {t('安装 Rabby', 'Instal Rabby', 'Install Rabby')}
             </a>
             <a
               href="https://metamask.io/download/"
@@ -162,7 +188,7 @@ function BeginnerHyperliquidGuide({
               className="inline-flex items-center gap-2 rounded-lg border border-nofx-gold/20 bg-nofx-bg-deeper px-3 py-2 text-xs font-semibold text-nofx-text hover:border-nofx-gold/40 hover:bg-nofx-bg"
             >
               <ExternalLink className="h-3.5 w-3.5" />
-              MetaMask
+              {t('MetaMask', 'MetaMask', 'MetaMask')}
             </a>
           </>
         ) : null}
@@ -172,7 +198,7 @@ function BeginnerHyperliquidGuide({
           rel="noreferrer"
           className="inline-flex items-center gap-2 rounded-lg bg-nofx-gold px-3 py-2 text-xs font-bold text-white hover:bg-nofx-accent"
         >
-          Open Hyperliquid
+          {t('打开 Hyperliquid', 'Buka Hyperliquid', 'Open Hyperliquid')}
           <ExternalLink className="h-3.5 w-3.5" />
         </a>
       </div>
@@ -200,6 +226,9 @@ export function AutopilotLaunchPanel({
   const [refreshing, setRefreshing] = useState(false)
   const [hasInjectedWallet, setHasInjectedWallet] = useState(false)
   const isZh = language === 'zh'
+  const isId = language === 'id'
+  const t = (zh: string, id: string, en: string) =>
+    isZh ? zh : isId ? id : en
 
   useEffect(() => {
     setHasInjectedWallet(
@@ -383,13 +412,16 @@ export function AutopilotLaunchPanel({
     action?: JSX.Element
   }> = [
     {
-      title: 'AI fee wallet',
-      detail:
+      title: t('AI 费用钱包', 'Dompet biaya AI', 'AI fee wallet'),
+      detail: t(
+        '用 Base USDC 支付 Claw402.ai 的数据和模型调用费用。与交易保证金分开管理。',
+        'Membayar panggilan data dan model Claw402.ai dengan Base USDC. Ini terpisah dari jaminan trading.',
         'Pays Claw402.ai data and model calls with Base USDC. This is separate from trading collateral.',
+      ),
       status: feeReady ? 'ready' : 'action',
       meta: feeWalletAddress
         ? `${shortAddress(feeWalletAddress)} · ${formatUSDC(feeWalletBalance)} USDC`
-        : 'Base USDC wallet required',
+        : t('需要 Base USDC 钱包', 'Dompet Base USDC diperlukan', 'Base USDC wallet required'),
       action: feeWalletAddress ? (
         <div className="flex flex-wrap items-center gap-3">
           <button
@@ -398,7 +430,7 @@ export function AutopilotLaunchPanel({
             className="inline-flex items-center gap-1.5 text-xs font-semibold text-nofx-gold hover:text-nofx-accent"
           >
             <CircleDollarSign className="h-3.5 w-3.5" />
-            Deposit
+            {t('充值', 'Setor', 'Deposit')}
           </button>
           <button
             type="button"
@@ -406,7 +438,7 @@ export function AutopilotLaunchPanel({
             className="inline-flex items-center gap-1.5 text-xs font-semibold text-nofx-gold hover:text-nofx-accent"
           >
             <Copy className="h-3.5 w-3.5" />
-            Copy
+            {t('复制', 'Salin', 'Copy')}
           </button>
         </div>
       ) : (
@@ -416,18 +448,21 @@ export function AutopilotLaunchPanel({
           className="inline-flex items-center gap-1.5 text-xs font-semibold text-nofx-gold hover:text-nofx-accent"
         >
           <ArrowRight className="h-3.5 w-3.5" />
-          Open
+          {t('打开', 'Buka', 'Open')}
         </button>
       ),
     },
     {
-      title: 'Hyperliquid trading wallet',
-      detail:
+      title: t('Hyperliquid 交易钱包', 'Dompet trading Hyperliquid', 'Hyperliquid trading wallet'),
+      detail: t(
+        '连接 EVM 钱包，批准 NOFX Agent 和创建者费用，然后保存到 NOFX。',
+        'Hubungkan dompet EVM, setujui Agen NOFX, setujui biaya builder, lalu simpan ke NOFX.',
         'Connect an EVM wallet, approve a NOFX Agent, approve the builder fee, then save it to NOFX.',
+      ),
       status: hyperliquidConnected ? 'ready' : 'action',
       meta: hyperliquidExchange?.hyperliquidWalletAddr
-        ? `${shortAddress(hyperliquidExchange.hyperliquidWalletAddr)} · authorized`
-        : 'Agent and trading authorization required',
+        ? `${shortAddress(hyperliquidExchange.hyperliquidWalletAddr)} · ${t('已授权', 'Telah diotorisasi', 'authorized')}`
+        : t('需要 Agent 和交易授权', 'Otorisasi Agen dan trading diperlukan', 'Agent and trading authorization required'),
       action: (
         <button
           type="button"
@@ -435,33 +470,39 @@ export function AutopilotLaunchPanel({
           className="inline-flex items-center gap-1.5 text-xs font-semibold text-nofx-gold hover:text-nofx-accent"
         >
           <Wallet className="h-3.5 w-3.5" />
-          Open
+          {t('打开', 'Buka', 'Open')}
         </button>
       ),
     },
     {
-      title: 'Trading balance',
-      detail:
+      title: t('交易余额', 'Saldo trading', 'Trading balance'),
+      detail: t(
+        '将 USDC 存入 Hyperliquid。NOFX 将其用作 Claw402 自动驾驶策略的保证金。',
+        'Setor USDC ke Hyperliquid. NOFX menggunakannya sebagai margin untuk strategi Claw402 Autopilot.',
         'Deposit USDC to Hyperliquid. NOFX uses it as margin for the Claw402 Autopilot strategy.',
+      ),
       status: tradingBalanceReady
         ? 'ready'
         : hyperliquidConnected
           ? 'action'
           : 'blocked',
       meta: hyperliquidConnected
-        ? `${formatUSDC(tradingBalance)} USDC available`
-        : 'Connect Hyperliquid first',
+        ? `${formatUSDC(tradingBalance)} ${t('USDC 可用', 'USDC tersedia', 'USDC available')}`
+        : t('请先连接 Hyperliquid', 'Hubungkan Hyperliquid terlebih dahulu', 'Connect Hyperliquid first'),
     },
     {
-      title: 'NOFX Autopilot',
-      detail:
+      title: t('NOFX 自动驾驶', 'Autopilot NOFX', 'NOFX Autopilot'),
+      detail: t(
+        '读取 Claw402 面板，获取 Signal Lab 和清算结构，用 K 线确认，仅在信号足够强时以 10 倍全仓交易。',
+        'Membaca papan Claw402, mengambil Signal Lab dan struktur likuidasi, konfirmasi dengan candle, lalu trading full-size 10x hanya saat sinyal cukup kuat.',
         'Reads the Claw402 board, fetches Signal Lab and liquidation structure, confirms with candles, then trades full-size 10x only when the setup is strong enough.',
+      ),
       status: allReady ? 'ready' : 'blocked',
       meta: autopilotTrader?.is_running
-        ? 'Running'
+        ? t('运行中', 'Berjalan', 'Running')
         : autopilotTrader
-          ? 'Ready to start'
-          : 'Ready to create when setup is complete',
+          ? t('准备就绪', 'Siap dimulai', 'Ready to start')
+          : t('配置完成后即可创建', 'Siap dibuat saat pengaturan selesai', 'Ready to create when setup is complete'),
     },
   ]
 
@@ -479,7 +520,7 @@ export function AutopilotLaunchPanel({
           }}
           className="inline-flex items-center justify-center gap-2 rounded-lg bg-nofx-gold px-4 py-3 text-sm font-bold text-white hover:bg-nofx-accent"
         >
-          Open Claw402 wallet
+          {t('打开 Claw402 钱包', 'Buka dompet Claw402', 'Open Claw402 wallet')}
           <ArrowRight className="h-4 w-4" />
         </button>
       )
@@ -500,7 +541,7 @@ export function AutopilotLaunchPanel({
           }}
           className="inline-flex items-center justify-center gap-2 rounded-lg bg-nofx-gold px-4 py-3 text-sm font-bold text-white hover:bg-nofx-accent"
         >
-          Connect Hyperliquid
+          {t('连接 Hyperliquid', 'Hubungkan Hyperliquid', 'Connect Hyperliquid')}
           <ArrowRight className="h-4 w-4" />
         </button>
       )
@@ -514,7 +555,7 @@ export function AutopilotLaunchPanel({
           rel="noreferrer"
           className="inline-flex items-center justify-center gap-2 rounded-lg bg-nofx-gold px-4 py-3 text-sm font-bold text-white hover:bg-nofx-accent"
         >
-          Deposit USDC on Hyperliquid
+          {t('在 Hyperliquid 上存入 USDC', 'Setor USDC di Hyperliquid', 'Deposit USDC on Hyperliquid')}
           <ExternalLink className="h-4 w-4" />
         </a>
       )
@@ -529,7 +570,7 @@ export function AutopilotLaunchPanel({
           }
           className="inline-flex items-center justify-center gap-2 rounded-lg bg-nofx-success px-4 py-3 text-sm font-bold text-white hover:bg-nofx-success/80"
         >
-          Open dashboard
+          {t('打开仪表盘', 'Buka dashboard', 'Open dashboard')}
           <ArrowRight className="h-4 w-4" />
         </button>
       )
@@ -547,7 +588,7 @@ export function AutopilotLaunchPanel({
         ) : (
           <Zap className="h-4 w-4" />
         )}
-        Start NOFX Autopilot
+        {t('启动 NOFX 自动驾驶', 'Mulai Autopilot NOFX', 'Start NOFX Autopilot')}
       </button>
     )
   }
@@ -560,14 +601,17 @@ export function AutopilotLaunchPanel({
             <div>
               <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-nofx-gold/25 bg-nofx-gold/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-nofx-gold">
                 <ShieldCheck className="h-3.5 w-3.5" />
-                Guided Launch
+                {t('引导启动', 'Panduan Peluncuran', 'Guided Launch')}
               </div>
               <h2 className="text-2xl font-bold tracking-tight text-nofx-text md:text-3xl">
-                Start NOFX Autopilot in minutes
+                {t('几分钟内启动 NOFX 自动驾驶', 'Mulai Autopilot NOFX dalam hitungan menit', 'Start NOFX Autopilot in minutes')}
               </h2>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-nofx-text-muted">
-                One strategy, one launch path. Fund the AI fee wallet, authorize
-                Hyperliquid, deposit USDC, then run the Claw402 Autopilot.
+                {t(
+                  '一套策略，一条启动路径。充值 AI 费用钱包，授权 Hyperliquid，存入 USDC，然后运行 Claw402 自动驾驶。',
+                  'Satu strategi, satu jalur peluncuran. Danai dompet biaya AI, otorisasi Hyperliquid, setor USDC, lalu jalankan Claw402 Autopilot.',
+                  'One strategy, one launch path. Fund the AI fee wallet, authorize Hyperliquid, deposit USDC, then run the Claw402 Autopilot.',
+                )}
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -580,7 +624,7 @@ export function AutopilotLaunchPanel({
                 <RefreshCw
                   className={`h-3.5 w-3.5 ${refreshing || walletLoading ? 'animate-spin' : ''}`}
                 />
-                Refresh
+                {t('刷新', 'Segarkan', 'Refresh')}
               </button>
               {renderPrimaryAction()}
             </div>
@@ -631,25 +675,28 @@ export function AutopilotLaunchPanel({
         <aside className="border-t border-nofx-gold/20 bg-nofx-bg p-5 md:p-6 xl:border-l xl:border-t-0">
           <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-nofx-text">
             <Wallet className="h-4 w-4 text-nofx-gold" />
-            Hyperliquid setup
+            {t('Hyperliquid 设置', 'Pengaturan Hyperliquid', 'Hyperliquid setup')}
           </div>
           {hyperliquidConnected ? (
             <div className="rounded-lg border border-nofx-success/25 bg-nofx-success/10 p-4">
               <div className="flex items-center gap-2 text-sm font-semibold text-nofx-success">
                 <CheckCircle2 className="h-4 w-4" />
-                Trading authorization is ready
+                {t('交易授权已就绪', 'Otorisasi trading siap', 'Trading authorization is ready')}
               </div>
               <div className="mt-2 font-mono text-xs text-nofx-success/90">
                 {shortAddress(hyperliquidExchange?.hyperliquidWalletAddr)}
               </div>
               <p className="mt-3 text-xs leading-5 text-nofx-text-muted">
-                Funds stay in your Hyperliquid account. NOFX only stores the
-                authorized Agent key required for automated execution.
+                {t(
+                  '资金保留在你的 Hyperliquid 账户中。NOFX 仅存储自动执行所需的授权 Agent 密钥。',
+                  'Dana tetap di akun Hyperliquid Anda. NOFX hanya menyimpan kunci Agen yang diotorisasi yang diperlukan untuk eksekusi otomatis.',
+                  'Funds stay in your Hyperliquid account. NOFX only stores the authorized Agent key required for automated execution.',
+                )}
               </p>
             </div>
           ) : (
             <div className="space-y-4">
-              <BeginnerHyperliquidGuide hasInjectedWallet={hasInjectedWallet} />
+              <BeginnerHyperliquidGuide hasInjectedWallet={hasInjectedWallet} language={language} />
               <div id="hyperliquid-quick-connect">
                 <HyperliquidWalletConnect
                   language={isZh ? 'zh' : 'en'}

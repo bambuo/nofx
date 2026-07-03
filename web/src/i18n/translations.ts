@@ -68,6 +68,12 @@ export const translations = {
     collapse: 'Collapse',
     expand: 'Expand',
 
+    // HTTP Errors
+    requestTimedOut: 'Request timed out',
+    requestTimedOutDesc: 'The upstream service took too long to respond',
+    networkError: 'Network error',
+    networkErrorDesc: 'Unable to reach the server',
+
     // Equity Chart
     accountEquityCurve: 'Account Equity Curve',
     noHistoricalData: 'No Historical Data',
@@ -1460,6 +1466,12 @@ export const translations = {
     collapse: '▼ 收起',
     expand: '▶ 展开',
 
+    // HTTP Errors
+    requestTimedOut: '请求超时',
+    requestTimedOutDesc: '上游服务响应时间过长',
+    networkError: '网络错误',
+    networkErrorDesc: '无法连接到服务器',
+
     // Equity Chart
     accountEquityCurve: '账户净值曲线',
     noHistoricalData: '暂无历史数据',
@@ -2772,6 +2784,12 @@ export const translations = {
     aiThinking: 'Rantai Pemikiran AI',
     collapse: 'Tutup',
     expand: 'Buka',
+
+    // HTTP Errors
+    requestTimedOut: 'Waktu permintaan habis',
+    requestTimedOutDesc: 'Layanan upstream terlalu lama merespons',
+    networkError: 'Kesalahan jaringan',
+    networkErrorDesc: 'Tidak dapat menjangkau server',
 
     // Equity Chart
     accountEquityCurve: 'Kurva Ekuitas Akun',

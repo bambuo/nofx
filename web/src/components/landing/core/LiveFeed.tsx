@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion'
 import { useState, useEffect } from 'react'
+import type { Language } from '../../../i18n/translations'
 
 interface LogEntry {
     id: number
@@ -9,7 +10,38 @@ interface LogEntry {
     color: string
 }
 
-const generateLog = (id: number): LogEntry => {
+const liveFeedCopy: Record<Language, {
+    ws: string
+    signal: string
+    risk: string
+    macro: string
+    system: string
+}> = {
+    en: {
+        ws: 'WS_CONN: STABLE',
+        signal: 'US equities momentum signal confirmed',
+        risk: 'Risk check passed',
+        macro: 'Macro feed latency',
+        system: 'System optimization cycle complete. Allocating resources.',
+    },
+    zh: {
+        ws: '行情连接：稳定',
+        signal: '美股动量信号已确认',
+        risk: '风险检查通过',
+        macro: '宏观数据延迟',
+        system: '系统优化周期完成，正在分配资源。',
+    },
+    id: {
+        ws: 'WS_CONN: STABIL',
+        signal: 'Sinyal momentum saham AS terkonfirmasi',
+        risk: 'Pemeriksaan risiko lolos',
+        macro: 'Latensi feed makro',
+        system: 'Siklus optimasi sistem selesai. Mengalokasikan sumber daya.',
+    },
+}
+
+const generateLog = (id: number, language: Language): LogEntry => {
+    const copy = liveFeedCopy[language]
     const types = ['EXEC', 'SIGNAL', 'RISK', 'MACRO', 'SYS']
     const pairs = ['AAPL-USDC', 'NVDA-USDC', 'GOLD-USDC', 'EURUSD-USDC', 'OPENAI-IPO']
     const actions = ['BUY', 'SELL', 'HEDGE', 'ROTATE']
@@ -24,42 +56,43 @@ const generateLog = (id: number): LogEntry => {
             color = 'text-nofx-success'
             break;
         case 'SIGNAL':
-            msg = `US equities momentum signal confirmed (${(Math.random()).toFixed(3)} z-score)`
+            msg = `${copy.signal} (${(Math.random()).toFixed(3)} z-score)`
             color = 'text-nofx-gold'
             break;
         case 'RISK':
-            msg = `Risk check passed: ${pairs[Math.floor(Math.random() * pairs.length)]} exposure within limits`
+            msg = `${copy.risk}: ${pairs[Math.floor(Math.random() * pairs.length)]} exposure within limits`
             color = 'text-nofx-danger'
             break;
         case 'MACRO':
-            msg = `Macro feed latency < ${Math.floor(Math.random() * 10)}ms`
+            msg = `${copy.macro} < ${Math.floor(Math.random() * 10)}ms`
             color = 'text-nofx-text-muted'
             break;
         default:
-            msg = `System optimization cycle complete. Allocating resources.`
+            msg = copy.system
             color = 'text-nofx-accent'
     }
 
     return { id, time: new Date().toLocaleTimeString('en-US', { hour12: false }) + '.' + Math.floor(Math.random() * 999), type, msg, color }
 }
 
-export default function LiveFeed() {
+export default function LiveFeed({ language }: { language: Language }) {
     const [logs, setLogs] = useState<LogEntry[]>([])
+    const copy = liveFeedCopy[language]
 
     useEffect(() => {
         // Initial population
-        const initialLogs = Array.from({ length: 8 }).map((_, i) => generateLog(i))
+        const initialLogs = Array.from({ length: 8 }).map((_, i) => generateLog(i, language))
         setLogs(initialLogs)
 
         const interval = setInterval(() => {
             setLogs(prev => {
-                const newLog = generateLog(Date.now())
+                const newLog = generateLog(Date.now(), language)
                 return [newLog, ...prev.slice(0, 7)]
             })
         }, 800) // Fast 800ms updates for HFT feel
 
         return () => clearInterval(interval)
-    }, [])
+    }, [language])
 
     return (
         <section className="w-full bg-nofx-bg-lighter border-y border-[rgba(26,24,19,0.14)] py-1 overflow-hidden relative">
@@ -70,7 +103,7 @@ export default function LiveFeed() {
                 <div className="hidden md:flex items-center gap-6 text-nofx-text-muted border-r border-[rgba(26,24,19,0.14)] pr-6 shrink-0">
                     <div className="flex items-center gap-2">
                         <div className="w-1.5 h-1.5 bg-nofx-success rounded-full animate-pulse"></div>
-                        <span className="font-bold text-nofx-text">WS_CONN: STABLE</span>
+                        <span className="font-bold text-nofx-text">{copy.ws}</span>
                     </div>
                     <div className="flex items-center gap-2">
                         <span className="text-nofx-gold">TPS: 48,291</span>

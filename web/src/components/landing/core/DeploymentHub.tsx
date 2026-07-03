@@ -1,9 +1,57 @@
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Terminal, Copy, Check, ChevronRight, Server, Command, Shield } from 'lucide-react'
+import type { Language } from '../../../i18n/translations'
 
-export default function DeploymentHub() {
+const deploymentCopy: Record<Language, {
+    eyebrow: string
+    titleMain: string
+    titleAccent: string
+    description: string
+    features: { icon: typeof Command; label: string; desc: string }[]
+    terminalComment: string
+}> = {
+    en: {
+        eyebrow: 'System Deployment',
+        titleMain: 'DEPLOY',
+        titleAccent: 'INSTANTLY',
+        description:
+            'Initialize your own high-frequency trading node in seconds. Our optimized installer handles all dependencies, bringing the trading system online with a single command.',
+        features: [
+            { icon: Command, label: 'One-Line Install', desc: 'No configuration needed' },
+            { icon: Shield, label: 'Secure Core', desc: 'Sandboxed execution env' },
+        ],
+        terminalComment: '# Initialize NoFX Core Protocol',
+    },
+    zh: {
+        eyebrow: '系统部署',
+        titleMain: '立即',
+        titleAccent: '部署',
+        description:
+            '几秒钟内初始化你自己的交易节点。优化后的安装器会处理依赖，并用一条命令启动交易系统。',
+        features: [
+            { icon: Command, label: '一行安装', desc: '无需手动配置' },
+            { icon: Shield, label: '安全核心', desc: '沙箱化执行环境' },
+        ],
+        terminalComment: '# 初始化 NoFX 核心协议',
+    },
+    id: {
+        eyebrow: 'Deployment Sistem',
+        titleMain: 'DEPLOY',
+        titleAccent: 'INSTAN',
+        description:
+            'Inisialisasi node trading Anda dalam hitungan detik. Installer yang dioptimalkan menangani dependensi dan menyalakan sistem dengan satu perintah.',
+        features: [
+            { icon: Command, label: 'Instal Satu Baris', desc: 'Tanpa konfigurasi manual' },
+            { icon: Shield, label: 'Core Aman', desc: 'Lingkungan eksekusi sandbox' },
+        ],
+        terminalComment: '# Inisialisasi Protokol Inti NoFX',
+    },
+}
+
+export default function DeploymentHub({ language }: { language: Language }) {
     const [copied, setCopied] = useState(false)
+    const copy = deploymentCopy[language]
     const installCmd = "curl -fsSL https://raw.githubusercontent.com/NoFxAiOS/nofx/main/install.sh | bash"
 
     const handleCopy = () => {
@@ -23,23 +71,19 @@ export default function DeploymentHub() {
                     {/* Left Column: Context */}
                     <div className="space-y-8">
                         <div className="flex items-center gap-2 text-nofx-gold font-mono text-xs tracking-[0.2em] uppercase">
-                            <Server className="w-4 h-4" /> System Deployment
+                            <Server className="w-4 h-4" /> {copy.eyebrow}
                         </div>
 
                         <h2 className="text-4xl md:text-6xl font-black text-nofx-text leading-tight">
-                            DEPLOY <span className="text-nofx-gold">INSTANTLY</span>
+                            {copy.titleMain} <span className="text-nofx-gold">{copy.titleAccent}</span>
                         </h2>
 
                         <p className="text-nofx-text-muted text-lg leading-relaxed font-light">
-                            Initialize your own high-frequency trading node in seconds.
-                            Our optimized installer handles all dependencies, bringing the trading system online with a single command.
+                            {copy.description}
                         </p>
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4">
-                            {[
-                                { icon: Command, label: "One-Line Install", desc: "No configuration needed" },
-                                { icon: Shield, label: "Secure Core", desc: "Sandboxed execution env" }
-                            ].map((item, i) => (
+                            {copy.features.map((item, i) => (
                                 <div key={i} className="flex gap-4 items-start p-4 rounded bg-nofx-bg-lighter border border-[rgba(26,24,19,0.14)] hover:border-nofx-gold/30 transition-colors group">
                                     <div className="p-2 rounded bg-nofx-bg-deeper border border-[rgba(26,24,19,0.14)] text-nofx-gold group-hover:bg-nofx-gold/10 transition-colors">
                                         <item.icon className="w-5 h-5" />
@@ -79,7 +123,7 @@ export default function DeploymentHub() {
 
                             {/* Terminal Content */}
                             <div className="p-8 font-mono text-sm md:text-base bg-nofx-bg-lighter min-h-[200px] flex flex-col justify-center">
-                                <div className="mb-2 text-nofx-text-muted text-xs tracking-wide"># Initialize NoFX Core Protocol</div>
+                                <div className="mb-2 text-nofx-text-muted text-xs tracking-wide">{copy.terminalComment}</div>
                                 <div
                                     className="group relative flex items-start gap-3 p-4 rounded-lg bg-nofx-bg-deeper border border-[rgba(26,24,19,0.14)] hover:border-nofx-gold/50 cursor-pointer transition-all hover:bg-nofx-bg"
                                     onClick={handleCopy}

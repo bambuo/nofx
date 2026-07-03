@@ -11,6 +11,12 @@
 
 import axios, { AxiosInstance, AxiosError, AxiosResponse } from 'axios'
 import { toast } from 'sonner'
+import { t, type Language } from '../i18n/translations'
+
+function getLang(): Language {
+  const saved = localStorage.getItem('language')
+  return saved === 'zh' || saved === 'id' ? saved : 'en'
+}
 
 /**
  * Business response format - only business errors reach the caller
@@ -121,15 +127,16 @@ export class HttpClient {
     // Network error (no response from server)
     if (!error.response) {
       const isTimeout = error.code === 'ECONNABORTED'
+      const lang = getLang()
       const message = isTimeout
-        ? 'Request timed out'
-        : error.message || 'Network error'
+        ? t('requestTimedOut', lang)
+        : error.message || t('networkError', lang)
       if (!isSilent) {
-        toast.error(isTimeout ? 'Request timed out' : 'Network error', {
+        toast.error(isTimeout ? t('requestTimedOut', lang) : t('networkError', lang), {
           id: 'network-error',
           description: isTimeout
-            ? 'The upstream service took too long to respond'
-            : 'Unable to reach the server',
+            ? t('requestTimedOutDesc', lang)
+            : t('networkErrorDesc', lang),
         })
       }
       throw new Error(message)

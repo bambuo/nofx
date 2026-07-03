@@ -50,14 +50,14 @@ type Scope =
   | 'pre_ipo'
 type ListMode = 'claw402' | 'pool'
 
-const scopeOptions: Array<{ value: Scope; zh: string; en: string }> = [
-  { value: 'all', zh: 'All Claw402', en: 'All Claw402' },
-  { value: 'stock', zh: 'US Stocks', en: 'US Stocks' },
-  { value: 'crypto', zh: 'Crypto', en: 'Crypto' },
-  { value: 'commodity', zh: 'Commodities', en: 'Commodities' },
-  { value: 'index', zh: 'Indices', en: 'Indices' },
-  { value: 'forex', zh: 'FX', en: 'FX' },
-  { value: 'pre_ipo', zh: 'Pre-IPO', en: 'Pre-IPO' },
+const scopeOptions: Array<{ value: Scope; zh: string; id: string; en: string }> = [
+  { value: 'all', zh: '全部 Claw402', id: 'Semua Claw402', en: 'All Claw402' },
+  { value: 'stock', zh: '美股', id: 'Saham AS', en: 'US Stocks' },
+  { value: 'crypto', zh: '加密货币', id: 'Kripto', en: 'Crypto' },
+  { value: 'commodity', zh: '商品', id: 'Komoditas', en: 'Commodities' },
+  { value: 'index', zh: '指数', id: 'Indeks', en: 'Indices' },
+  { value: 'forex', zh: '外汇', id: 'Valas', en: 'FX' },
+  { value: 'pre_ipo', zh: 'Pre-IPO', id: 'Pre-IPO', en: 'Pre-IPO' },
 ]
 
 const categoryPriority: Record<string, number> = {
@@ -76,8 +76,8 @@ const detailBandOptions = ['5', '10', '15', '20']
 const claw402BoardLimit = 30
 const confidenceOptions = [65, 75, 82]
 
-const text = (language: string, zh: string, en: string) =>
-  language === 'zh' ? zh : en
+const text = (language: string, zh: string, id: string, en: string) =>
+  language === 'zh' ? zh : language === 'id' ? id : en
 
 function modelHasCredential(model: AIModel) {
   return Boolean(model.has_api_key || model.apiKey)
@@ -338,7 +338,7 @@ function strategySymbolForSignal(item: VergexSignalItem) {
 function categoryLabel(category: string | undefined, language: string) {
   const option = scopeOptions.find((item) => item.value === category)
   if (!option) return category || 'TradeFi'
-  return text(language, option.zh, option.en)
+  return text(language, option.zh, option.id, option.en)
 }
 
 function profileFromRisk(risk: RiskControlConfig | null | undefined): Profile {
@@ -1334,10 +1334,12 @@ export function StrategyStudioPage() {
         name: text(
           language,
           'NOFX Claw402 Auto Strategy',
+          'NOFX Claw402 Auto Strategy',
           'NOFX Claw402 Auto Strategy'
         ),
         description: text(
           language,
+          'The single built-in strategy: read the Claw402.ai board, fetch per-symbol details, then trade with raw candles.',
           'The single built-in strategy: read the Claw402.ai board, fetch per-symbol details, then trade with raw candles.',
           'The single built-in strategy: read the Claw402.ai board, fetch per-symbol details, then trade with raw candles.'
         ),
@@ -1388,8 +1390,8 @@ export function StrategyStudioPage() {
       notify.success(
         successMessage ||
           (activateAfter
-            ? text(language, 'Strategy saved and activated', 'Strategy saved and activated')
-            : text(language, 'Strategy saved', 'Strategy saved'))
+            ? text(language, '策略已保存并激活', 'Strategi disimpan dan diaktifkan', 'Strategy saved and activated')
+            : text(language, '策略已保存', 'Strategi disimpan', 'Strategy saved'))
       )
       await loadStrategies(selectedStrategy.id)
     } catch (err) {
@@ -1494,15 +1496,15 @@ export function StrategyStudioPage() {
     const hyperliquid = exchanges.find(isHyperliquidExchange)
     if (!hyperliquid) {
       throw new Error(
-        'No Hyperliquid account is ready. Connect Hyperliquid and authorize the NOFX agent first.'
+        text(language, '没有可用的 Hyperliquid 账户。请先连接 Hyperliquid 并授权 NOFX agent。', 'Tidak ada akun Hyperliquid yang siap. Hubungkan Hyperliquid dan otorisasi agen NOFX terlebih dahulu.', 'No Hyperliquid account is ready. Connect Hyperliquid and authorize the NOFX agent first.')
       )
     }
     if (!hyperliquid.enabled) {
-      throw new Error('The Hyperliquid account is disabled. Enable it first.')
+      throw new Error(text(language, 'Hyperliquid 账户已禁用，请先启用。', 'Akun Hyperliquid dinonaktifkan. Aktifkan terlebih dahulu.', 'The Hyperliquid account is disabled. Enable it first.'))
     }
     if (!modelHasExchangeKey(hyperliquid)) {
       throw new Error(
-        'The Hyperliquid agent key is missing. Reconnect Hyperliquid and save the agent wallet.'
+        text(language, 'Hyperliquid agent 密钥缺失。请重新连接 Hyperliquid 并保存 agent 钱包。', 'Kunci agen Hyperliquid hilang. Hubungkan ulang Hyperliquid dan simpan dompet agen.', 'The Hyperliquid agent key is missing. Reconnect Hyperliquid and save the agent wallet.')
       )
     }
     if (!hyperliquid.hyperliquidBuilderApproved) {
@@ -1587,7 +1589,7 @@ export function StrategyStudioPage() {
     if (!selectedStrategy) return
     try {
       await api.activateStrategy(selectedStrategy.id)
-      notify.success(text(language, 'Strategy activated', 'Strategy activated'))
+      notify.success(text(language, '策略已激活', 'Strategi diaktifkan', 'Strategy activated'))
       await loadStrategies(selectedStrategy.id)
     } catch (err) {
       notify.error(
@@ -1599,17 +1601,17 @@ export function StrategyStudioPage() {
   const deleteStrategy = async () => {
     if (!selectedStrategy || selectedStrategy.is_active) return
     const ok = await confirmToast(
-      text(language, 'Delete this strategy?', 'Delete this strategy?'),
+      text(language, '删除此策略？', 'Hapus strategi ini?', 'Delete this strategy?'),
       {
-        title: text(language, 'Confirm delete', 'Confirm delete'),
-        okText: text(language, 'Delete', 'Delete'),
-        cancelText: text(language, 'Cancel', 'Cancel'),
+        title: text(language, '确认删除', 'Konfirmasi hapus', 'Confirm delete'),
+        okText: text(language, '删除', 'Hapus', 'Delete'),
+        cancelText: text(language, '取消', 'Batal', 'Cancel'),
       }
     )
     if (!ok) return
     try {
       await api.deleteStrategy(selectedStrategy.id)
-      notify.success(text(language, 'Strategy deleted', 'Strategy deleted'))
+      notify.success(text(language, '策略已删除', 'Strategi dihapus', 'Strategy deleted'))
       await loadStrategies()
     } catch (err) {
       notify.error(
@@ -1701,7 +1703,7 @@ export function StrategyStudioPage() {
             max_margin_usage: profile.margin,
             min_confidence: profile.confidence,
           }),
-          custom_prompt: text(language, profile.promptZh, profile.promptEn),
+          custom_prompt: text(language, profile.promptZh, profile.promptEn, profile.promptEn),
           prompt_sections: undefined,
         },
       }
@@ -1723,12 +1725,13 @@ export function StrategyStudioPage() {
         <div className="flex items-center justify-between gap-4">
           <div>
             <h1 className="text-xl font-semibold text-nofx-text">
-              {text(language, 'NOFX Autopilot', 'NOFX Autopilot')}
+              {text(language, 'NOFX 自动驾驶', 'Autopilot NOFX', 'NOFX Autopilot')}
             </h1>
             <p className="mt-1 text-sm text-nofx-text-muted">
               {text(
                 language,
-                'Autonomous market selection powered by Claw402.ai Signal Lab, liquidation structure, and raw candles.',
+                '自主市场选择，由 Claw402.ai Signal Lab、清算结构和原始 K 线驱动。',
+                'Pemilihan pasar otonom didukung oleh Claw402.ai Signal Lab, struktur likuidasi, dan candle mentah.',
                 'Autonomous market selection powered by Claw402.ai Signal Lab, liquidation structure, and raw candles.'
               )}
             </p>
@@ -1744,7 +1747,7 @@ export function StrategyStudioPage() {
             ) : (
               <Bot className="h-4 w-4" />
             )}
-            {text(language, 'Launch Autopilot', 'Launch Autopilot')}
+            {text(language, '启动自动驾驶', 'Luncurkan Autopilot', 'Launch Autopilot')}
           </button>
         </div>
       </div>
@@ -1752,7 +1755,7 @@ export function StrategyStudioPage() {
       <div className="grid min-h-[calc(100vh-137px)] grid-cols-1">
         <aside className="hidden border-r border-[rgba(26,24,19,0.14)] bg-nofx-bg-deeper p-3">
           <div className="mb-2 px-2 text-xs font-medium uppercase tracking-wide text-nofx-text-muted">
-            {text(language, 'My strategies', 'My strategies')}
+            {text(language, '我的策略', 'Strategi Saya', 'My strategies')}
           </div>
           <div className="space-y-2">
             {strategies.map((strategy) => (
@@ -1776,7 +1779,7 @@ export function StrategyStudioPage() {
                   </span>
                   {strategy.is_active ? (
                     <span className="rounded bg-nofx-success/15 px-1.5 py-0.5 text-[10px] text-nofx-success">
-                      {text(language, 'Active', 'Active')}
+                      {text(language, '活跃', 'Aktif', 'Active')}
                     </span>
                   ) : null}
                 </div>
@@ -1819,13 +1822,14 @@ export function StrategyStudioPage() {
                       placeholder={text(
                         language,
                         'One-line strategy note',
+                        'One-line strategy note',
                         'One-line strategy note'
                       )}
                       className="mt-1 w-full bg-transparent text-sm text-nofx-text-muted outline-none placeholder:text-nofx-text-muted/50"
                     />
                     {hasChanges ? (
                       <div className="mt-2 text-xs text-nofx-gold">
-                        {text(language, 'Unsaved changes', 'Unsaved changes')}
+                        {text(language, '未保存的更改', 'Perubahan belum disimpan', 'Unsaved changes')}
                       </div>
                     ) : null}
                   </div>
@@ -1841,7 +1845,7 @@ export function StrategyStudioPage() {
                       ) : (
                         <Check className="h-4 w-4" />
                       )}
-                      {text(language, 'Save and use', 'Save and use')}
+                      {text(language, '保存并使用', 'Simpan dan gunakan', 'Save and use')}
                     </button>
                     <button
                       type="button"
@@ -1854,7 +1858,7 @@ export function StrategyStudioPage() {
                       ) : (
                         <Save className="h-4 w-4" />
                       )}
-                      {text(language, 'Save', 'Save')}
+                      {text(language, '保存', 'Simpan', 'Save')}
                     </button>
                     {!selectedStrategy.is_active ? (
                       <button
@@ -1863,7 +1867,7 @@ export function StrategyStudioPage() {
                         className="inline-flex items-center gap-2 rounded-lg border border-nofx-success/30 bg-nofx-success/10 px-3 py-2 text-sm text-nofx-success hover:bg-nofx-success/15"
                       >
                         <Check className="h-4 w-4" />
-                        {text(language, 'Activate only', 'Activate only')}
+                        {text(language, '仅激活', 'Aktifkan saja', 'Activate only')}
                       </button>
                     ) : null}
                     {!selectedStrategy.is_active ? (
@@ -1873,7 +1877,7 @@ export function StrategyStudioPage() {
                         className="inline-flex items-center gap-2 rounded-lg border border-nofx-danger/25 bg-nofx-danger/10 px-3 py-2 text-sm text-nofx-danger hover:bg-nofx-danger/15"
                       >
                         <Trash2 className="h-4 w-4" />
-                        {text(language, 'Delete', 'Delete')}
+                        {text(language, '删除', 'Hapus', 'Delete')}
                       </button>
                     ) : null}
                   </div>
@@ -1885,10 +1889,10 @@ export function StrategyStudioPage() {
                   <div>
                     <div className="flex items-center gap-2 text-sm font-semibold text-nofx-text">
                       <Sparkles className="h-4 w-4 text-nofx-gold" />
-                      Signal Board
+                      {text(language, '信号面板', 'Papan Sinyal', 'Signal Board')}
                     </div>
                     <div className="mt-1 text-xs text-nofx-text-muted">
-                      Live Claw402.ai ranking · Signal Lab · liquidation map
+                      {text(language, '实时 Claw402.ai 排名 · Signal Lab · 清算热力图', 'Peringkat Claw402.ai langsung · Signal Lab · peta likuidasi', 'Live Claw402.ai ranking · Signal Lab · liquidation map')}
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-2">
@@ -1910,8 +1914,8 @@ export function StrategyStudioPage() {
                     >
                       <Sparkles className="h-3.5 w-3.5" />
                       {signals.length === 0
-                        ? 'Load Claw402 board'
-                        : 'Claw402 board'}
+                        ? text(language, '加载 Claw402 面板', 'Muat papan Claw402', 'Load Claw402 board')
+                        : text(language, 'Claw402 面板', 'Papan Claw402', 'Claw402 board')}
                     </button>
                     <button
                       type="button"
@@ -1926,7 +1930,7 @@ export function StrategyStudioPage() {
                       <RefreshCw
                         className={`h-3.5 w-3.5 ${symbolsLoading ? 'animate-spin' : ''}`}
                       />
-                      Symbol pool
+                      {text(language, '币种池', 'Kumpulan koin', 'Symbol pool')}
                     </button>
                     <button
                       type="button"
@@ -1939,7 +1943,7 @@ export function StrategyStudioPage() {
                       <RefreshCw
                         className={`h-3.5 w-3.5 ${signalsLoading ? 'animate-spin' : ''}`}
                       />
-                      Refresh
+                      {text(language, '刷新', 'Segarkan', 'Refresh')}
                     </button>
                     {selectedSymbols.length > 0 ? (
                       <button
@@ -2101,7 +2105,7 @@ export function StrategyStudioPage() {
                     className="mb-4 inline-flex items-center gap-2 rounded-lg border border-nofx-gold/30 bg-nofx-gold/10 px-4 py-3 text-sm font-semibold text-nofx-gold hover:bg-nofx-gold/15"
                   >
                     <Sparkles className="h-4 w-4" />
-                    Load Signal Board
+                    {text(language, '加载信号面板', 'Muat Papan Sinyal', 'Load Signal Board')}
                   </button>
                 ) : null}
 
@@ -2276,8 +2280,7 @@ export function StrategyStudioPage() {
                       </>
                     ) : (
                       <div className="rounded-lg border border-[rgba(26,24,19,0.14)] bg-nofx-bg-deeper px-4 py-4 text-sm text-nofx-text-muted">
-                        NOFX Autopilot reviews the Claw402 board, Signal Lab,
-                        liquidation structure, and raw candles automatically.
+                        {text(language, 'NOFX 自动驾驶会自动审查 Claw402 面板、Signal Lab、清算结构和原始 K 线。', 'Autopilot NOFX secara otomatis meninjau papan Claw402, Signal Lab, struktur likuidasi, dan candle mentah.', 'NOFX Autopilot reviews the Claw402 board, Signal Lab, liquidation structure, and raw candles automatically.')}
                       </div>
                     )}
                   </div>
@@ -2302,11 +2305,11 @@ export function StrategyStudioPage() {
 
               <details className="hidden rounded-lg border border-[rgba(26,24,19,0.14)] bg-nofx-bg-deeper p-4">
                 <summary className="cursor-pointer text-sm font-semibold text-nofx-text">
-                  {text(language, 'Advanced settings', 'Advanced settings')}
+                  {text(language, '高级设置', 'Pengaturan lanjutan', 'Advanced settings')}
                 </summary>
                 <div className="mt-4 rounded-lg border border-[rgba(26,24,19,0.14)] bg-nofx-bg-lighter p-4">
                   <div className="mb-3 text-sm font-semibold text-nofx-text">
-                    {text(language, 'Trading style', 'Trading style')}
+                    {text(language, '交易风格', 'Gaya trading', 'Trading style')}
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {profileOptions.map((profile) => (
@@ -2320,7 +2323,7 @@ export function StrategyStudioPage() {
                             : 'border-[rgba(26,24,19,0.14)] text-nofx-text-muted hover:text-nofx-text'
                         }`}
                       >
-                        {text(language, profile.zh, profile.en)}
+                        {text(language, profile.zh, profile.en, profile.en)}
                       </button>
                     ))}
                   </div>
@@ -2329,12 +2332,12 @@ export function StrategyStudioPage() {
                   <div className="rounded-lg border border-[rgba(26,24,19,0.14)] bg-nofx-bg-lighter p-4">
                     <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-nofx-text">
                       <Sparkles className="h-4 w-4 text-nofx-gold" />
-                      {text(language, 'Raw candles', 'Raw candles')}
+                      {text(language, '原始 K 线', 'Candle mentah', 'Raw candles')}
                     </div>
                     <div className="space-y-4">
                       <div>
                         <div className="mb-2 text-xs text-nofx-text-muted">
-                          {text(language, 'Timeframe', 'Timeframe')}
+                          {text(language, '时间周期', 'Jangka waktu', 'Timeframe')}
                         </div>
                         <div className="flex flex-wrap gap-2">
                           {timeframeOptions.map((timeframe) => (
@@ -2356,7 +2359,7 @@ export function StrategyStudioPage() {
                       </div>
                       <div>
                         <div className="mb-2 text-xs text-nofx-text-muted">
-                          {text(language, 'Bars', 'Bars')}
+                          {text(language, 'K 线数量', 'Jumlah bar', 'Bars')}
                         </div>
                         <div className="flex flex-wrap gap-2">
                           {barCountOptions.map((count) => (
@@ -2381,12 +2384,12 @@ export function StrategyStudioPage() {
                   <div className="rounded-lg border border-[rgba(26,24,19,0.14)] bg-nofx-bg-lighter p-4">
                     <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-nofx-text">
                       <Shield className="h-4 w-4 text-nofx-success" />
-                      {text(language, 'Trading parameters', 'Trading parameters')}
+                      {text(language, '交易参数', 'Parameter trading', 'Trading parameters')}
                     </div>
                     <div className="grid gap-4 sm:grid-cols-3">
                       <label className="space-y-2">
                         <span className="text-xs text-nofx-text-muted">
-                          {text(language, 'Max positions', 'Max positions')}
+                          {text(language, '最大持仓数', 'Posisi maks', 'Max positions')}
                         </span>
                         <select
                           value={risk.max_positions}
@@ -2406,7 +2409,7 @@ export function StrategyStudioPage() {
                       </label>
                       <label className="space-y-2">
                         <span className="text-xs text-nofx-text-muted">
-                          {text(language, 'Leverage', 'Leverage')}
+                          {text(language, '杠杆', 'Leverage', 'Leverage')}
                         </span>
                         <select
                           value={risk.altcoin_max_leverage}
@@ -2424,7 +2427,7 @@ export function StrategyStudioPage() {
                       </label>
                       <label className="space-y-2">
                         <span className="text-xs text-nofx-text-muted">
-                          {text(language, 'Entry confidence', 'Entry confidence')}
+                          {text(language, '入场置信度', 'Keyakinan masuk', 'Entry confidence')}
                         </span>
                         <select
                           value={risk.min_confidence}
@@ -2448,7 +2451,7 @@ export function StrategyStudioPage() {
 
                 <div className="mt-4 rounded-lg border border-[rgba(26,24,19,0.14)] bg-nofx-bg-lighter p-4">
                   <div className="mb-2 text-sm font-semibold text-nofx-text">
-                    {text(language, 'Strategy note', 'Strategy note')}
+                    {text(language, '策略说明', 'Catatan strategi', 'Strategy note')}
                   </div>
                   <textarea
                     value={aiConfig.custom_prompt || ''}
@@ -2457,6 +2460,7 @@ export function StrategyStudioPage() {
                     }
                     placeholder={text(
                       language,
+                      'Example: only trade clean trends; skip entries when board signals conflict with candles.',
                       'Example: only trade clean trends; skip entries when board signals conflict with candles.',
                       'Example: only trade clean trends; skip entries when board signals conflict with candles.'
                     )}
@@ -2473,7 +2477,7 @@ export function StrategyStudioPage() {
                 className="inline-flex items-center gap-2 rounded-lg bg-nofx-gold px-4 py-2 text-sm font-semibold text-nofx-bg hover:bg-nofx-gold-highlight"
               >
                 <Plus className="h-4 w-4" />
-                {text(language, 'Initialize Autopilot', 'Initialize Autopilot')}
+                {text(language, '初始化自动驾驶', 'Inisialisasi Autopilot', 'Initialize Autopilot')}
               </button>
             </div>
           )}

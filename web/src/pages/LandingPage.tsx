@@ -36,13 +36,13 @@ export function LandingPage() {
         onLoginRequired={handleLoginRequired}
       />
       <div className="min-h-screen bg-nofx-bg text-nofx-text font-sans selection:bg-nofx-gold selection:text-nofx-bg">
-        <TerminalHero />
+        <TerminalHero language={language} />
 
-        <LiveFeed />
+        <LiveFeed language={language} />
 
-        <AgentGrid />
+        <AgentGrid language={language} />
 
-        <DeploymentHub />
+        <DeploymentHub language={language} />
 
         <FooterSection language={language} />
 

@@ -2,6 +2,7 @@ import { motion } from 'framer-motion'
 import { ArrowRight, Shield, Activity, CircuitBoard, Wifi, Globe, Zap, Star, GitFork, Users, MessageCircle } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { useGitHubStats } from '../../../hooks/useGitHubStats'
+import type { Language } from '../../../i18n/translations'
 import AgentTerminal from '../brand/AgentTerminal'
 
 const tickerLabels: Record<string, string> = {
@@ -15,7 +16,136 @@ const tickerLabels: Record<string, string> = {
     PREIPO: 'PRE-IPO INDEX',
 }
 
-export default function TerminalHero() {
+const heroCopy: Record<Language, {
+    diagnostics: string
+    kernelLatency: string
+    memoryIntegrity: string
+    uptime: string
+    securityProtocols: string
+    securityLevel: string
+    logs: string[]
+    identity: string
+    titleTop: string
+    titleAccent: string
+    description: string
+    liveFeeds: string
+    markets: string[]
+    command: string
+    cta: string
+    tickerGlobal: string
+    tickerRouting: string
+    tickerLatency: string
+    aiModel: string
+    communityStats: {
+        stars: string
+        forks: string
+        contributors: string
+        community: string
+    }
+}> = {
+    en: {
+        diagnostics: 'SYSTEM_DIAGNOSTICS',
+        kernelLatency: 'KERNEL_LATENCY',
+        memoryIntegrity: 'MEMORY_INTEGRITY',
+        uptime: 'UPTIME',
+        securityProtocols: 'SECURITY PROTOCOLS',
+        securityLevel: 'LEVEL 3 ACTIVE',
+        logs: [
+            '> CONNECTING TO MARKET DATA... OK',
+            '> SYNCING VENUES (424/424)... OK',
+            '> LOADING MULTI-ASSET UNIVERSE... DONE',
+            '> AWAITING USER INPUT_',
+        ],
+        identity: 'NOFX PROFESSIONAL MULTI-ASSET AGENT OS',
+        titleTop: 'AGENTIC',
+        titleAccent: 'TRADING',
+        description:
+            'Professional AI trading agents for US stocks, commodities, FX and Pre-IPO synthetic markets. Build institutional-grade strategies by chatting in plain English.',
+        liveFeeds: 'Live Data Feeds Active',
+        markets: ['US STOCKS', 'COMMODITIES', 'FOREX', 'PRE-IPO'],
+        command: 'create US stock trader --idea="breakouts"',
+        cta: 'CREATE STOCK TRADER',
+        tickerGlobal: 'GLOBAL MARKET ACCESS',
+        tickerRouting: 'MULTI-ASSET ROUTING ENABLED',
+        tickerLatency: 'LOW LATENCY LINK: 12ms',
+        aiModel: 'AI MODEL: Claude Opus 4.6',
+        communityStats: {
+            stars: 'GITHUB STARS',
+            forks: 'FORKS',
+            contributors: 'CONTRIBUTORS',
+            community: 'DEV COMMUNITY',
+        },
+    },
+    zh: {
+        diagnostics: '系统诊断',
+        kernelLatency: '内核延迟',
+        memoryIntegrity: '内存完整性',
+        uptime: '在线率',
+        securityProtocols: '安全协议',
+        securityLevel: '3 级防护已激活',
+        logs: [
+            '> 正在连接市场数据... 正常',
+            '> 正在同步交易场所 (424/424)... 正常',
+            '> 正在加载多资产市场... 完成',
+            '> 等待用户输入_',
+        ],
+        identity: 'NOFX 专业多资产智能体系统',
+        titleTop: '智能体',
+        titleAccent: '交易',
+        description:
+            '面向美股、商品、外汇和 Pre-IPO 合成市场的专业 AI 交易智能体。用自然语言描述想法，即可构建机构级策略。',
+        liveFeeds: '实时数据流已连接',
+        markets: ['美股', '商品', '外汇', 'PRE-IPO'],
+        command: '创建美股交易员 --思路="突破"',
+        cta: '创建美股交易员',
+        tickerGlobal: '全球市场接入',
+        tickerRouting: '多资产路由已启用',
+        tickerLatency: '低延迟链路：12ms',
+        aiModel: 'AI 模型：Claude Opus 4.6',
+        communityStats: {
+            stars: 'GITHUB 星标',
+            forks: 'FORK',
+            contributors: '贡献者',
+            community: '开发者社区',
+        },
+    },
+    id: {
+        diagnostics: 'DIAGNOSTIK SISTEM',
+        kernelLatency: 'LATENSI KERNEL',
+        memoryIntegrity: 'INTEGRITAS MEMORI',
+        uptime: 'UPTIME',
+        securityProtocols: 'PROTOKOL KEAMANAN',
+        securityLevel: 'LEVEL 3 AKTIF',
+        logs: [
+            '> MENGHUBUNGKAN DATA PASAR... OK',
+            '> SINKRONISASI VENUE (424/424)... OK',
+            '> MEMUAT SEMESTA MULTI-ASET... SELESAI',
+            '> MENUNGGU INPUT PENGGUNA_',
+        ],
+        identity: 'NOFX SISTEM AGEN MULTI-ASET PROFESIONAL',
+        titleTop: 'TRADING',
+        titleAccent: 'AGEN AI',
+        description:
+            'Agen trading AI profesional untuk saham AS, komoditas, FX, dan pasar sintetis Pre-IPO. Bangun strategi institusional lewat bahasa alami.',
+        liveFeeds: 'Data real-time aktif',
+        markets: ['SAHAM AS', 'KOMODITAS', 'FOREX', 'PRE-IPO'],
+        command: 'buat trader saham AS --ide="breakout"',
+        cta: 'BUAT TRADER SAHAM',
+        tickerGlobal: 'AKSES PASAR GLOBAL',
+        tickerRouting: 'ROUTING MULTI-ASET AKTIF',
+        tickerLatency: 'LINK LATENSI RENDAH: 12ms',
+        aiModel: 'MODEL AI: Claude Opus 4.6',
+        communityStats: {
+            stars: 'BINTANG GITHUB',
+            forks: 'FORK',
+            contributors: 'KONTRIBUTOR',
+            community: 'KOMUNITAS DEV',
+        },
+    },
+}
+
+export default function TerminalHero({ language }: { language: Language }) {
+    const copy = heroCopy[language]
 
     // Real-time price state
     const [prices, setPrices] = useState<Record<string, string>>({
@@ -117,11 +247,11 @@ export default function TerminalHero() {
                     <div className="space-y-6">
                         <div className="border border-[rgba(26,24,19,0.14)] rounded p-4 bg-nofx-bg-lighter">
                             <h3 className="text-xs font-mono text-nofx-gold mb-4 flex items-center gap-2">
-                                <Activity className="w-3 h-3" /> SYSTEM_DIAGNOSTICS
+                                <Activity className="w-3 h-3" /> {copy.diagnostics}
                             </h3>
                             <div className="space-y-3 font-mono text-[10px] text-nofx-text-muted">
                                 <div className="flex justify-between items-center">
-                                    <span>KERNEL_LATENCY</span>
+                                    <span>{copy.kernelLatency}</span>
                                     <span className="text-nofx-accent">12ms</span>
                                 </div>
                                 <div className="w-full h-1 bg-nofx-bg-deeper rounded-full overflow-hidden">
@@ -129,7 +259,7 @@ export default function TerminalHero() {
                                 </div>
 
                                 <div className="flex justify-between items-center">
-                                    <span>MEMORY_INTEGRITY</span>
+                                    <span>{copy.memoryIntegrity}</span>
                                     <span className="text-nofx-success">100%</span>
                                 </div>
                                 <div className="w-full h-1 bg-nofx-bg-deeper rounded-full overflow-hidden">
@@ -137,7 +267,7 @@ export default function TerminalHero() {
                                 </div>
 
                                 <div className="flex justify-between items-center">
-                                    <span>UPTIME</span>
+                                    <span>{copy.uptime}</span>
                                     <span className="text-nofx-text">99.999%</span>
                                 </div>
                             </div>
@@ -146,7 +276,7 @@ export default function TerminalHero() {
                         <div className="p-4 border border-[rgba(26,24,19,0.14)] rounded bg-nofx-bg-lighter">
                             <div className="flex items-center gap-3 text-nofx-text-muted mb-2">
                                 <Shield className="w-4 h-4" />
-                                <span className="text-[10px] font-mono tracking-widest">SECURITY PROTOCOLS</span>
+                                <span className="text-[10px] font-mono tracking-widest">{copy.securityProtocols}</span>
                             </div>
                             <div className="flex gap-1">
                                 <div className="h-1 flex-1 bg-nofx-gold"></div>
@@ -154,16 +284,15 @@ export default function TerminalHero() {
                                 <div className="h-1 flex-1 bg-nofx-gold"></div>
                                 <div className="h-1 flex-1 bg-nofx-bg-deeper"></div>
                             </div>
-                            <div className="mt-2 text-right text-[10px] text-nofx-gold/80 font-mono">LEVEL 3 ACTIVATE</div>
+                            <div className="mt-2 text-right text-[10px] text-nofx-gold/80 font-mono">{copy.securityLevel}</div>
                         </div>
                     </div>
 
                     {/* Bottom: Network Log */}
                     <div className="font-mono text-[10px] text-nofx-text-muted space-y-1 opacity-70">
-                        <div>&gt; CONNECTING TO MARKET DATA... OK</div>
-                        <div>&gt; SYNCING VENUES (424/424)... OK</div>
-                        <div>&gt; LOADING MULTI-ASSET UNIVERSE... DONE</div>
-                        <div className="animate-pulse">&gt; AWAITING USER INPUT_</div>
+                        {copy.logs.map((log, index) => (
+                            <div key={log} className={index === copy.logs.length - 1 ? 'animate-pulse' : undefined}>{log}</div>
+                        ))}
                     </div>
                 </div>
 
@@ -180,20 +309,19 @@ export default function TerminalHero() {
                             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-nofx-gold opacity-75"></span>
                             <span className="relative inline-flex rounded-full h-2 w-2 bg-nofx-gold"></span>
                         </span>
-                        <span className="text-xs font-mono text-nofx-gold tracking-widest">NOFX PROFESSIONAL MULTI-ASSET AGENT OS</span>
+                        <span className="text-xs font-mono text-nofx-gold tracking-widest">{copy.identity}</span>
                     </motion.div>
 
                     {/* Main Title - Massive & Impactful */}
                     {/* Main Title - Massive & Impactful */}
                     <div className="relative z-20">
                         <h1 className="text-5xl sm:text-6xl md:text-8xl lg:text-9xl font-black tracking-tighter leading-[0.9] md:leading-[0.8] mb-6 select-none text-nofx-text">
-                            AGENTIC<br />
-                            <span className="text-nofx-gold animate-shimmer tracking-tight">TRADING</span>
+                            {copy.titleTop}<br />
+                            <span className="text-nofx-gold animate-shimmer tracking-tight">{copy.titleAccent}</span>
                         </h1>
 
                         <p className="max-w-xl text-nofx-text-muted text-lg mb-6 font-light leading-relaxed">
-                            Professional AI trading agents for US stocks, commodities, FX and Pre-IPO synthetic markets.
-                            Build institutional-grade strategies by chatting in plain English.
+                            {copy.description}
                         </p>
                     </div>
 
@@ -205,10 +333,10 @@ export default function TerminalHero() {
                                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-nofx-success opacity-75"></span>
                                 <span className="relative inline-flex rounded-full h-2 w-2 bg-nofx-success"></span>
                             </span>
-                            Live Data Feeds Active
+                            {copy.liveFeeds}
                         </div>
                         <div className="flex flex-wrap gap-4 font-mono">
-                            {['US STOCKS', 'COMMODITIES', 'FOREX', 'PRE-IPO'].map((market) => (
+                            {copy.markets.map((market) => (
                                 <div key={market} className="relative group cursor-default">
                                     <div className="absolute -inset-0.5 bg-nofx-gold/15 rounded-lg blur opacity-0 group-hover:opacity-100 transition duration-500"></div>
                                     <div className="relative flex items-center gap-3 px-6 py-3 rounded-lg bg-nofx-bg-lighter border border-[rgba(26,24,19,0.14)] hover:border-nofx-gold/50 transition-all duration-300">
@@ -224,7 +352,7 @@ export default function TerminalHero() {
                     <div className="w-full max-w-lg h-12 bg-nofx-bg-lighter border border-[rgba(26,24,19,0.14)] rounded flex items-center px-4 mb-10 font-mono text-sm shadow-sm group hover:border-nofx-gold/50 transition-colors cursor-text" onClick={() => document.getElementById('market-scanner')?.scrollIntoView({ behavior: 'smooth' })}>
                         <span className="text-nofx-success mr-2">➜</span>
                         <span className="text-nofx-accent mr-2">~</span>
-                        <span className="text-nofx-text-muted">create US stock trader --idea="breakouts"</span>
+                        <span className="text-nofx-text-muted">{copy.command}</span>
                         <span className="w-2 h-4 bg-nofx-gold ml-1 animate-pulse"></span>
                     </div>
 
@@ -236,14 +364,14 @@ export default function TerminalHero() {
                             style={{ clipPath: 'polygon(10% 0, 100% 0, 100% 70%, 90% 100%, 0 100%, 0 30%)' }}
                         >
                             <span className="relative z-10 flex items-center gap-2">
-                                CREATE STOCK TRADER <ArrowRight className="w-4 h-4" />
+                                {copy.cta} <ArrowRight className="w-4 h-4" />
                             </span>
                             <div className="absolute inset-0 bg-nofx-text/10 translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
                         </button>
                     </div>
 
                     {/* Community Stats Row */}
-                    <CommunityStats />
+                    <CommunityStats language={language} />
 
                 </div>
             </div>
@@ -273,9 +401,9 @@ export default function TerminalHero() {
             {/* FLOATING TICKER FOOTER */}
             <div className="absolute bottom-0 w-full bg-nofx-bg-lighter border-t border-[rgba(26,24,19,0.14)] backdrop-blur-md z-30 overflow-hidden py-2 flex items-center">
                 <div className="flex animate-marquee whitespace-nowrap gap-12 text-xs font-mono text-nofx-text-muted px-4">
-                    <span className="flex items-center gap-2"><Globe className="w-3 h-3 text-nofx-text-muted" /> GLOBAL MARKET ACCESS</span>
-                    <span className="flex items-center gap-2 text-nofx-gold"><Zap className="w-3 h-3" /> MULTI-ASSET ROUTING ENABLED</span>
-                    <span className="flex items-center gap-2"><Wifi className="w-3 h-3 text-nofx-success" /> LOW LATENCY LINK: 12ms</span>
+                    <span className="flex items-center gap-2"><Globe className="w-3 h-3 text-nofx-text-muted" /> {copy.tickerGlobal}</span>
+                    <span className="flex items-center gap-2 text-nofx-gold"><Zap className="w-3 h-3" /> {copy.tickerRouting}</span>
+                    <span className="flex items-center gap-2"><Wifi className="w-3 h-3 text-nofx-success" /> {copy.tickerLatency}</span>
 
                     {/* Dynamic Coins */}
                     {Object.entries(prices).map(([symbol, price]) => (
@@ -284,7 +412,7 @@ export default function TerminalHero() {
                         </span>
                     ))}
 
-                    <span className="flex items-center gap-2"><CircuitBoard className="w-3 h-3 text-nofx-accent" /> AI MODEL: Claude Opus 4.6</span>
+                    <span className="flex items-center gap-2"><CircuitBoard className="w-3 h-3 text-nofx-accent" /> {copy.aiModel}</span>
 
                     {/* Duplicate sequence for seamless loop effect (basic set) */}
                     {Object.entries(prices).map(([symbol, price]) => (
@@ -301,33 +429,34 @@ export default function TerminalHero() {
 
 import { OFFICIAL_LINKS } from '../../../constants/branding'
 
-function CommunityStats() {
+function CommunityStats({ language }: { language: Language }) {
     const { stars, forks, contributors, isLoading, error } = useGitHubStats('NoFxAiOS', 'nofx')
+    const labels = heroCopy[language].communityStats
 
     const stats = [
         {
-            label: 'GITHUB STARS',
+            label: labels.stars,
             value: isLoading ? '...' : (error ? '10,500+' : stars.toLocaleString()),
             icon: Star,
             color: 'text-nofx-gold',
             href: OFFICIAL_LINKS.github
         },
         {
-            label: 'FORKS',
+            label: labels.forks,
             value: isLoading ? '...' : (error ? '2,800+' : forks.toLocaleString()),
             icon: GitFork,
             color: 'text-nofx-accent',
             href: `${OFFICIAL_LINKS.github}/fork`
         },
         {
-            label: 'CONTRIBUTORS',
+            label: labels.contributors,
             value: isLoading ? '...' : (contributors > 0 ? contributors : '50+'),
             icon: Users,
             color: 'text-nofx-success',
             href: `${OFFICIAL_LINKS.github}/graphs/contributors`
         },
         {
-            label: 'DEV COMMUNITY',
+            label: labels.community,
             value: '6,600+',
             icon: MessageCircle,
             color: 'text-nofx-accent',

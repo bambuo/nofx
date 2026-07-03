@@ -11,8 +11,87 @@ import {
   Zap,
 } from 'lucide-react'
 import { ROUTES } from '../../router/paths'
+import { useLanguage } from '../../contexts/LanguageContext'
 
-const setupSteps = [
+function t3(lang: string, zh: string, id: string, en: string) {
+  return lang === 'zh' ? zh : lang === 'id' ? id : en
+}
+
+const setupStepsZh = [
+  {
+    title: '创建 NOFX 账户',
+    detail:
+      '你的账户将自动驾驶策略、钱包授权状态和交易仪表盘集中在一处。',
+    icon: KeyRound,
+    action: '创建账户',
+    to: ROUTES.register,
+  },
+  {
+    title: '充值 AI 费用钱包',
+    detail:
+      'NOFX 会为 Claw402.ai 的数据和模型调用准备一个 Base USDC 钱包。该钱包与交易保证金分开管理。',
+    icon: CircleDollarSign,
+    action: '扫码充值',
+    to: ROUTES.login,
+    returnUrl: `${ROUTES.traders}?setup=claw402`,
+  },
+  {
+    title: '授权 Hyperliquid',
+    detail:
+      '连接你的交易钱包，批准 NOFX Agent 和创建者费用。资金保留在你的 Hyperliquid 账户中。',
+    icon: Wallet,
+    action: '连接交易所',
+    to: ROUTES.login,
+    returnUrl: `${ROUTES.traders}?setup=hyperliquid`,
+  },
+  {
+    title: '存入交易 USDC',
+    detail:
+      '在 Hyperliquid 上添加 USDC，然后启动 NOFX 自动驾驶。策略会自动创建并启动。',
+    icon: Zap,
+    action: '打开 Hyperliquid',
+    href: 'https://app.hyperliquid.xyz/',
+  },
+]
+
+const setupStepsId = [
+  {
+    title: 'Buat akun NOFX',
+    detail:
+      'Akun Anda menyimpan konfigurasi Autopilot, status otorisasi dompet, dan dashboard trading di satu tempat.',
+    icon: KeyRound,
+    action: 'Buat akun',
+    to: ROUTES.register,
+  },
+  {
+    title: 'Danai dompet biaya AI',
+    detail:
+      'NOFX menyiapkan dompet Base USDC untuk panggilan data dan model Claw402.ai. Dompet ini terpisah dari jaminan trading.',
+    icon: CircleDollarSign,
+    action: 'Buka QR setoran',
+    to: ROUTES.login,
+    returnUrl: `${ROUTES.traders}?setup=claw402`,
+  },
+  {
+    title: 'Otorisasi Hyperliquid',
+    detail:
+      'Hubungkan dompet trading Anda, setujui Agen NOFX, dan setujui biaya builder. Dana tetap di akun Hyperliquid Anda.',
+    icon: Wallet,
+    action: 'Hubungkan bursa',
+    to: ROUTES.login,
+    returnUrl: `${ROUTES.traders}?setup=hyperliquid`,
+  },
+  {
+    title: 'Setor USDC trading',
+    detail:
+      'Tambahkan USDC di Hyperliquid, lalu mulai Autopilot NOFX. Strategi dibuat dan diluncurkan secara otomatis.',
+    icon: Zap,
+    action: 'Buka Hyperliquid',
+    href: 'https://app.hyperliquid.xyz/',
+  },
+]
+
+const setupStepsEn = [
   {
     title: 'Create your NOFX account',
     detail:
@@ -55,7 +134,23 @@ const pipeline = [
   'Confirm with raw OHLCV candles, then trade full-size 10x only when the setup is strong enough.',
 ]
 
+const pipelineZh = [
+  '读取实时 Claw402.ai 面板，美股优先于加密货币。',
+  '获取每个候选品种的 Signal Lab 和成本/清算热力图详情。',
+  '用原始 OHLCV K 线确认，仅在信号足够强时以 10 倍全仓交易。',
+]
+
+const pipelineId = [
+  'Baca papan Claw402.ai langsung, dengan saham AS diprioritaskan sebelum kripto.',
+  'Ambil Signal Lab dan detail peta panas biaya/likuidasi untuk setiap kandidat.',
+  'Konfirmasi dengan candle OHLCV mentah, lalu trading full-size 10x hanya saat sinyal cukup kuat.',
+]
+
 export function TraderLaunchGuestPage() {
+  const { language } = useLanguage()
+  const setupSteps = language === 'zh' ? setupStepsZh : language === 'id' ? setupStepsId : setupStepsEn
+  const steps = language === 'zh' ? pipelineZh : language === 'id' ? pipelineId : pipeline
+
   return (
     <div className="min-h-[calc(100vh-4rem)] overflow-hidden bg-nofx-bg px-4 py-10 md:px-8">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-8">
@@ -66,12 +161,10 @@ export function TraderLaunchGuestPage() {
               NOFX Autopilot
             </div>
             <h1 className="max-w-3xl text-4xl font-bold tracking-tight text-nofx-text md:text-5xl">
-              One strategy. Four setup steps. Then it trades.
+              {t3(language, '一套策略，四个步骤，然后开始交易。', 'Satu strategi. Empat langkah. Lalu mulai trading.', 'One strategy. Four setup steps. Then it trades.')}
             </h1>
             <p className="mt-5 max-w-2xl text-base leading-7 text-nofx-text-muted">
-              NOFX runs a single Claw402-driven strategy: board, per-market
-              details, liquidation structure, candles, execution. No strategy
-              picker, no manual symbol picking required.
+              {t3(language, 'NOFX 运行单一的 Claw402 驱动策略：面板、每个市场的详情、清算结构、K 线、执行。无需策略选择器，无需手动选择交易品种。', 'NOFX menjalankan satu strategi berbasis Claw402: board, detail per pasar, struktur likuidasi, candle, eksekusi. Tidak perlu pemilih strategi, tidak perlu memilih simbol manual.', 'NOFX runs a single Claw402-driven strategy: board, per-market details, liquidation structure, candles, execution. No strategy picker, no manual symbol picking required.')}
             </p>
             <div className="mt-7 flex flex-col gap-3 sm:flex-row">
               <Link
@@ -84,14 +177,14 @@ export function TraderLaunchGuestPage() {
                 }
                 className="inline-flex items-center justify-center gap-2 rounded-xl bg-nofx-gold px-5 py-3 text-sm font-bold text-white transition hover:bg-nofx-gold/90"
               >
-                Start setup
+                {t3(language, '开始设置', 'Mulai pengaturan', 'Start setup')}
                 <ArrowRight className="h-4 w-4" />
               </Link>
               <Link
                 to={ROUTES.register}
                 className="inline-flex items-center justify-center rounded-xl border border-nofx-gold/20 bg-nofx-bg-deeper px-5 py-3 text-sm font-semibold text-nofx-text transition hover:border-nofx-gold/40 hover:bg-nofx-bg-deeper"
               >
-                Create account
+                {t3(language, '创建账户', 'Buat akun', 'Create account')}
               </Link>
             </div>
           </div>
@@ -163,12 +256,10 @@ export function TraderLaunchGuestPage() {
         <section className="grid gap-5 rounded-2xl border border-nofx-gold/20 bg-nofx-bg-lighter p-5 md:grid-cols-[0.78fr_1.22fr] md:p-6">
           <div>
             <div className="text-sm font-semibold uppercase tracking-[0.18em] text-nofx-gold">
-              No trading wallet yet?
+              {t3(language, '还没有交易钱包？', 'Belum punya dompet trading?', 'No trading wallet yet?')}
             </div>
             <p className="mt-3 text-sm leading-6 text-nofx-text-muted">
-              NOFX does not need your main-wallet private key. Install or unlock
-              an EVM wallet, fund Hyperliquid with USDC, then authorize the NOFX
-              Agent after sign-in.
+              {t3(language, 'NOFX 不需要你的主钱包私钥。安装或解锁 EVM 钱包，用 USDC 充值 Hyperliquid，然后在登录后授权 NOFX Agent。', 'NOFX tidak memerlukan kunci privat dompet utama Anda. Instal atau buka kunci dompet EVM, danai Hyperliquid dengan USDC, lalu otorisasi Agen NOFX setelah masuk.', 'NOFX does not need your main-wallet private key. Install or unlock an EVM wallet, fund Hyperliquid with USDC, then authorize the NOFX Agent after sign-in.')}
             </p>
           </div>
           <div className="grid gap-3 lg:grid-cols-3">
@@ -179,9 +270,9 @@ export function TraderLaunchGuestPage() {
               className="group rounded-xl border border-nofx-gold/20 bg-nofx-bg-deeper p-4 transition hover:border-nofx-gold/30 hover:bg-nofx-gold/[0.06]"
             >
               <Download className="mb-3 h-4 w-4 text-nofx-gold" />
-              <div className="font-semibold text-nofx-text">Install Rabby</div>
+              <div className="font-semibold text-nofx-text">{t3(language, '安装 Rabby', 'Instal Rabby', 'Install Rabby')}</div>
               <p className="mt-2 text-sm leading-6 text-nofx-text-muted">
-                Create or import an EVM wallet before connecting to Hyperliquid.
+                {t3(language, '在连接 Hyperliquid 前创建或导入 EVM 钱包。', 'Buat atau impor dompet EVM sebelum menghubungkan ke Hyperliquid.', 'Create or import an EVM wallet before connecting to Hyperliquid.')}
               </p>
             </a>
             <a
@@ -193,8 +284,7 @@ export function TraderLaunchGuestPage() {
               <ExternalLink className="mb-3 h-4 w-4 text-nofx-gold" />
               <div className="font-semibold text-nofx-text">MetaMask</div>
               <p className="mt-2 text-sm leading-6 text-nofx-text-muted">
-                Already use MetaMask? Unlock it, then continue setup inside
-                NOFX.
+                {t3(language, '已经在用 MetaMask？解锁后继续在 NOFX 中设置。', 'Sudah menggunakan MetaMask? Buka kunci, lalu lanjutkan pengaturan di NOFX.', 'Already use MetaMask? Unlock it, then continue setup inside NOFX.')}
               </p>
             </a>
             <a
@@ -204,10 +294,9 @@ export function TraderLaunchGuestPage() {
               className="group rounded-xl border border-nofx-gold/20 bg-nofx-gold/10 p-4 transition hover:bg-nofx-gold/15"
             >
               <ExternalLink className="mb-3 h-4 w-4 text-nofx-gold" />
-              <div className="font-semibold text-nofx-text">Open Hyperliquid</div>
+              <div className="font-semibold text-nofx-text">{t3(language, '打开 Hyperliquid', 'Buka Hyperliquid', 'Open Hyperliquid')}</div>
               <p className="mt-2 text-sm leading-6 text-nofx-text-muted">
-                Deposit USDC there. Trading funds stay in your Hyperliquid
-                account.
+                {t3(language, '在那里存入 USDC。交易资金保留在你的 Hyperliquid 账户中。', 'Setor USDC di sana. Dana trading tetap di akun Hyperliquid Anda.', 'Deposit USDC there. Trading funds stay in your Hyperliquid account.')}
               </p>
             </a>
           </div>
@@ -216,15 +305,14 @@ export function TraderLaunchGuestPage() {
         <section className="grid gap-4 rounded-2xl border border-nofx-gold/20 bg-nofx-bg-lighter p-5 md:grid-cols-[0.72fr_1.28fr] md:p-6">
           <div>
             <div className="text-sm font-semibold uppercase tracking-[0.18em] text-nofx-gold">
-              What runs after launch
+              {t3(language, '启动后运行什么', 'Apa yang berjalan setelah peluncuran', 'What runs after launch')}
             </div>
             <p className="mt-3 text-sm leading-6 text-nofx-text-muted">
-              The same production path runs every cycle. The interface only asks
-              you to fund, authorize, and start.
+              {t3(language, '每个周期运行相同的生产环境路径。你只需要充值、授权和启动。', 'Jalur produksi yang sama berjalan setiap siklus. Antarmuka hanya meminta Anda mendanai, mengotorisasi, dan memulai.', 'The same production path runs every cycle. The interface only asks you to fund, authorize, and start.')}
             </p>
           </div>
           <div className="grid gap-3 lg:grid-cols-3">
-            {pipeline.map((item) => (
+            {steps.map((item) => (
               <div
                 key={item}
                 className="flex gap-3 rounded-xl border border-nofx-gold/20 bg-nofx-bg-deeper p-4"

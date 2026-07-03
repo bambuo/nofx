@@ -119,7 +119,7 @@ export default function HeaderBar({
                   path: ROUTES.data,
                   label:
                     language === 'zh'
-                      ? 'Data'
+                      ? '数据'
                       : language === 'id'
                         ? 'Data'
                         : 'Data',
@@ -130,7 +130,7 @@ export default function HeaderBar({
                   path: ROUTES.strategyMarket,
                   label:
                     language === 'zh'
-                      ? 'Market'
+                      ? '行情'
                       : language === 'id'
                         ? 'Pasar'
                         : 'Market',
@@ -320,10 +320,10 @@ export default function HeaderBar({
                         <Settings className="w-3.5 h-3.5" />
                         {userMode === 'beginner'
                           ? language === 'zh'
-                            ? 'Switch to Advanced'
+                            ? '切换到高级模式'
                             : 'Switch to Advanced'
                           : language === 'zh'
-                            ? 'Switch to Beginner'
+                            ? '切换到初级模式'
                             : 'Switch to Beginner'}
                       </button>
                       {onLogout && (
@@ -457,7 +457,7 @@ export default function HeaderBar({
                       path: ROUTES.data,
                       label:
                         language === 'zh'
-                          ? 'Data'
+                          ? '数据'
                           : language === 'id'
                             ? 'Data'
                             : 'Data',
@@ -468,7 +468,7 @@ export default function HeaderBar({
                       path: ROUTES.strategyMarket,
                       label:
                         language === 'zh'
-                          ? 'Market'
+                          ? '行情'
                           : language === 'id'
                             ? 'Pasar'
                             : 'Market',

@@ -81,7 +81,7 @@ export function FAQContent({
                 </h3>
 
                 {/* Answer */}
-                <div className="prose prose-invert max-w-none text-nofx-text-muted leading-relaxed">
+                <div className="prose prose-invert max-w-none leading-relaxed" style={{ color: '#D4CFC4' }}>
                   {item.id === 'github-projects-tasks' ? (
                     <div className="space-y-3">
                       <div className="text-base">

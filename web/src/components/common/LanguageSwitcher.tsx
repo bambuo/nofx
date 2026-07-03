@@ -3,7 +3,7 @@ import { useLanguage } from '../../contexts/LanguageContext'
 import type { Language } from '../../i18n/translations'
 
 const languages: { code: Language; label: string }[] = [
-  { code: 'zh', label: 'Chinese' },
+  { code: 'zh', label: 'ZH' },
   { code: 'en', label: 'EN' },
   { code: 'id', label: 'ID' },
 ]
