@@ -35,6 +35,10 @@ type Config struct {
 	// Requires HTTPS or localhost. Set to false for HTTP access via IP.
 	TransportEncryption bool
 
+	// TLS configuration (optional, for HTTPS)
+	TLSCertFile  string // TLS certificate file path
+	TLSKeyFile   string // TLS private key file path
+
 	// Experience improvement (anonymous usage statistics)
 	// Helps us understand product usage and improve the experience
 	// Set EXPERIENCE_IMPROVEMENT=false to disable
@@ -70,6 +74,9 @@ func Init() {
 	if cfg.JWTSecret == "" {
 		cfg.JWTSecret = "default-jwt-secret-change-in-production"
 	}
+	if cfg.JWTSecret == "default-jwt-secret-change-in-production" {
+		// 使用硬编码默认 JWT Secret 是严重安全风险，在 main.go 中会发出警告
+	}
 
 	if v := os.Getenv("REGISTRATION_ENABLED"); v != "" {
 		cfg.RegistrationEnabled = strings.ToLower(v) == "true"
@@ -87,10 +94,20 @@ func Init() {
 		}
 	}
 
-	// Transport encryption: default false for easier deployment
-	// Set TRANSPORT_ENCRYPTION=true to enable (requires HTTPS or localhost)
+	// Transport encryption: default true for security
+	// Set TRANSPORT_ENCRYPTION=false to disable (for HTTP access via IP)
 	if v := os.Getenv("TRANSPORT_ENCRYPTION"); v != "" {
 		cfg.TransportEncryption = strings.ToLower(v) == "true"
+	} else {
+		cfg.TransportEncryption = true
+	}
+
+	// TLS configuration (optional)
+	if v := os.Getenv("TLS_CERT_FILE"); v != "" {
+		cfg.TLSCertFile = v
+	}
+	if v := os.Getenv("TLS_KEY_FILE"); v != "" {
+		cfg.TLSKeyFile = v
 	}
 
 	// Experience improvement: anonymous usage statistics

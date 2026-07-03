@@ -86,7 +86,11 @@ func main() {
 
 	// Set JWT secret
 	auth.SetJWTSecret(cfg.JWTSecret)
-	logger.Info("🔑 JWT secret configured")
+	if cfg.JWTSecret == "default-jwt-secret-change-in-production" {
+		logger.Warn("⚠️ WARNING: Using default JWT secret! Set JWT_SECRET in .env for production security")
+	} else {
+		logger.Info("🔑 JWT secret configured")
+	}
 
 	// WebSocket market monitor is NO LONGER USED
 	// All K-line data now comes from CoinAnk API instead of Binance WebSocket cache

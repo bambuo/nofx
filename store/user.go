@@ -160,26 +160,40 @@ func (s *UserStore) UpdatePassword(userID, passwordHash string) error {
 		Exec(ctx)
 }
 
-// EnsureAdmin ensures admin user exists
-func (s *UserStore) EnsureAdmin() error {
+// EnsureAdmin ensures admin user exists with the given password hash
+// Returns error if admin already exists with a different password (to prevent silent overwrite)
+func (s *UserStore) EnsureAdmin(passwordHash string) error {
 	if s.ec == nil {
 		return fmt.Errorf("ent client not available")
 	}
+	if passwordHash == "" {
+		return fmt.Errorf("password hash cannot be empty for admin user")
+	}
 	ctx := context.Background()
-	exists, err := s.ec.User.Query().Where(entuser.ID("admin")).Exist(ctx)
+	// Check if admin already exists
+	existing, err := s.ec.User.Query().Where(entuser.ID("admin")).Only(ctx)
 	if err != nil {
+		if ent.IsNotFound(err) {
+			// Create new admin with password
+			_, err = s.ec.User.Create().
+				SetID("admin").
+				SetEmail("admin@localhost").
+				SetPasswordHash(passwordHash).
+				SetOtpVerified(true).
+				Save(ctx)
+			return err
+		}
 		return err
 	}
-	if exists {
-		return nil
+	// Admin exists, verify the password hash is not empty
+	if existing.PasswordHash == "" {
+		// Update empty password hash
+		return s.ec.User.UpdateOne(existing).
+			SetPasswordHash(passwordHash).
+			SetUpdatedAt(time.Now().UTC()).
+			Exec(ctx)
 	}
-	_, err = s.ec.User.Create().
-		SetID("admin").
-		SetEmail("admin@localhost").
-		SetPasswordHash("").
-		SetOtpVerified(true).
-		Save(ctx)
-	return err
+	return nil
 }
 
 // strPtr returns a pointer to the string, or nil if empty

@@ -29,6 +29,7 @@ import (
 	"nofx/trader/kucoin"
 	"nofx/trader/lighter"
 	"nofx/trader/okx"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -58,6 +59,9 @@ func NewServer(traderManager *manager.TraderManager, st *store.Store, cryptoServ
 
 	// Enable CORS
 	router.Use(corsMiddleware())
+
+	// Add security headers
+	router.Use(securityHeadersMiddleware())
 
 	// Create crypto handler
 	cryptoHandler := NewCryptoHandler(cryptoService)
@@ -89,10 +93,33 @@ func NewServer(traderManager *manager.TraderManager, st *store.Store, cryptoServ
 	return s
 }
 
-// corsMiddleware CORS middleware
-func corsMiddleware() gin.HandlerFunc {
+// securityHeadersMiddleware adds security-related HTTP headers
+func securityHeadersMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+		c.Writer.Header().Set("X-Content-Type-Options", "nosniff")
+		c.Writer.Header().Set("X-Frame-Options", "DENY")
+		c.Writer.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
+		c.Writer.Header().Set("X-Permitted-Cross-Domain-Policies", "none")
+		c.Writer.Header().Set("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+		// Only set HSTS if HTTPS is enabled
+		if cfg := config.Get(); cfg.TLSCertFile != "" && cfg.TLSKeyFile != "" {
+			c.Writer.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+		}
+		c.Next()
+	}
+}
+
+// corsMiddleware CORS middleware (configurable via CORS_ALLOWED_ORIGIN env var)
+func corsMiddleware() gin.HandlerFunc {
+	// Get allowed origin from env or default to * for easy deployment
+	allowedOrigin := os.Getenv("CORS_ALLOWED_ORIGIN")
+	if allowedOrigin == "" {
+		allowedOrigin = "*"
+	}
+	logger.Infof("🌐 CORS allowed origin: %s", allowedOrigin)
+
+	return func(c *gin.Context) {
+		c.Writer.Header().Set("Access-Control-Allow-Origin", allowedOrigin)
 		c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 
@@ -142,11 +169,11 @@ func (s *Server) setupRoutes() {
 		// Public strategy market (no authentication required)
 		api.GET("/strategies/public", s.handlePublicStrategies)
 
-		// Authentication related routes (no authentication required)
-		api.POST("/register", s.handleRegister)
-		api.POST("/login", s.handleLogin)
-		api.POST("/verify-otp", s.handleVerifyOTP)
-		api.POST("/complete-registration", s.handleCompleteRegistration)
+		// Authentication related routes (no authentication required, with rate limiting)
+		api.POST("/register", rateLimitMiddleware(registerLimiter), s.handleRegister)
+		api.POST("/login", rateLimitMiddleware(loginLimiter), s.handleLogin)
+		api.POST("/verify-otp", rateLimitMiddleware(otpLimiter), s.handleVerifyOTP)
+		api.POST("/complete-registration", rateLimitMiddleware(otpLimiter), s.handleCompleteRegistration)
 
 		// Routes requiring authentication
 		protected := api.Group("/", s.authMiddleware())
@@ -3082,13 +3109,20 @@ func (s *Server) handleRegister(c *gin.Context) {
 		return
 	}
 
+	// Register request
 	var req struct {
 		Email    string `json:"email" binding:"required,email"`
-		Password string `json:"password" binding:"required,min=6"`
+		Password string `json:"password" binding:"required,min=8"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		SafeBadRequest(c, "Invalid request parameters")
+		SafeBadRequest(c, "Invalid request parameters (password must be at least 8 characters)")
+		return
+	}
+
+	// Validate password complexity
+	if err := validatePasswordStrength(req.Password); err != nil {
+		SafeBadRequest(c, err.Error())
 		return
 	}
 
@@ -3103,7 +3137,8 @@ func (s *Server) handleRegister(c *gin.Context) {
 				return
 			}
 			// Password correct, allow user to continue OTP setup
-			// Return existing OTP information
+			// Return OTP setup info (includes otp_secret for manual entry into Authenticator app)
+			// WARNING: otp_secret is sensitive - ensure HTTPS is used in production
 			qrCodeURL := auth.GetOTPQRCodeURL(existingUser.OTPSecret, req.Email)
 			c.JSON(http.StatusOK, gin.H{
 				"user_id":     existingUser.ID,
@@ -3163,7 +3198,8 @@ func (s *Server) handleRegister(c *gin.Context) {
 		return
 	}
 
-	// Return OTP setup information
+	// Return OTP setup information (includes otp_secret for manual entry into Authenticator app)
+	// WARNING: otp_secret is sensitive - ensure HTTPS is used in production
 	qrCodeURL := auth.GetOTPQRCodeURL(otpSecret, req.Email)
 	c.JSON(http.StatusOK, gin.H{
 		"user_id":     userID,
@@ -3254,7 +3290,8 @@ func (s *Server) handleLogin(c *gin.Context) {
 
 	// Check if OTP is verified
 	if !user.OTPVerified {
-		// Return OTP info so user can complete setup
+		// Return OTP info so user can complete setup (includes otp_secret for manual entry)
+		// WARNING: otp_secret is sensitive - ensure HTTPS is used in production
 		qrCodeURL := auth.GetOTPQRCodeURL(user.OTPSecret, user.Email)
 		c.JSON(http.StatusOK, gin.H{
 			"user_id":            user.ID,
@@ -3320,12 +3357,18 @@ func (s *Server) handleVerifyOTP(c *gin.Context) {
 func (s *Server) handleResetPassword(c *gin.Context) {
 	var req struct {
 		Email       string `json:"email" binding:"required,email"`
-		NewPassword string `json:"new_password" binding:"required,min=6"`
+		NewPassword string `json:"new_password" binding:"required,min=8"`
 		OTPCode     string `json:"otp_code" binding:"required"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
 		SafeBadRequest(c, "Invalid request parameters")
+		return
+	}
+
+	// Validate password complexity
+	if err := validatePasswordStrength(req.NewPassword); err != nil {
+		SafeBadRequest(c, err.Error())
 		return
 	}
 
@@ -3408,36 +3451,20 @@ func (s *Server) handleGetSupportedExchanges(c *gin.Context) {
 // Start Start server
 func (s *Server) Start() error {
 	addr := fmt.Sprintf(":%d", s.port)
-	logger.Infof("🌐 API server starting at http://localhost%s", addr)
-	logger.Infof("📊 API Documentation:")
-	logger.Infof("  • GET  /api/health           - Health check")
-	logger.Infof("  • GET  /api/traders          - Public AI trader leaderboard top 50 (no auth required)")
-	logger.Infof("  • GET  /api/competition      - Public competition data (no auth required)")
-	logger.Infof("  • GET  /api/top-traders      - Top 5 trader data (no auth required, for performance comparison)")
-	logger.Infof("  • GET  /api/equity-history?trader_id=xxx - Public return rate historical data (no auth required, for competition)")
-	logger.Infof("  • GET  /api/equity-history-batch?trader_ids=a,b,c - Batch get historical data (no auth required, performance comparison optimization)")
-	logger.Infof("  • GET  /api/traders/:id/public-config - Public trader config (no auth required, no sensitive info)")
-	logger.Infof("  • POST /api/traders          - Create new AI trader")
-	logger.Infof("  • DELETE /api/traders/:id    - Delete AI trader")
-	logger.Infof("  • POST /api/traders/:id/start - Start AI trader")
-	logger.Infof("  • POST /api/traders/:id/stop  - Stop AI trader")
-	logger.Infof("  • GET  /api/models           - Get AI model config")
-	logger.Infof("  • PUT  /api/models           - Update AI model config")
-	logger.Infof("  • GET  /api/exchanges        - Get exchange config")
-	logger.Infof("  • PUT  /api/exchanges        - Update exchange config")
-	logger.Infof("  • GET  /api/status?trader_id=xxx     - Specified trader's system status")
-	logger.Infof("  • GET  /api/account?trader_id=xxx    - Specified trader's account info")
-	logger.Infof("  • GET  /api/positions?trader_id=xxx  - Specified trader's position list")
-	logger.Infof("  • GET  /api/decisions?trader_id=xxx  - Specified trader's decision log")
-	logger.Infof("  • GET  /api/decisions/latest?trader_id=xxx - Specified trader's latest decisions")
-	logger.Infof("  • GET  /api/statistics?trader_id=xxx - Specified trader's statistics")
-	logger.Infof("  • GET  /api/performance?trader_id=xxx - Specified trader's AI learning performance analysis")
-	logger.Info()
 
 	s.httpServer = &http.Server{
 		Addr:    addr,
 		Handler: s.router,
 	}
+
+	// Check if TLS is configured
+	cfg := config.Get()
+	if cfg.TLSCertFile != "" && cfg.TLSKeyFile != "" {
+		logger.Infof("🌐 API server starting at https://localhost%s (TLS enabled)", addr)
+		return s.httpServer.ListenAndServeTLS(cfg.TLSCertFile, cfg.TLSKeyFile)
+	}
+
+	logger.Infof("🌐 API server starting at http://localhost%s (TLS not configured)", addr)
 	return s.httpServer.ListenAndServe()
 }
 

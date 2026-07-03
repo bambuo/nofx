@@ -1,6 +1,58 @@
 package api
 
-import "strings"
+import (
+	"errors"
+	"strings"
+	"unicode"
+)
+
+// validatePasswordStrength checks password complexity requirements
+func validatePasswordStrength(password string) error {
+	if len(password) < 8 {
+		return errors.New("password must be at least 8 characters")
+	}
+
+	var (
+		hasUpper   bool
+		hasLower   bool
+		hasNumber  bool
+		hasSpecial bool
+	)
+
+	for _, ch := range password {
+		switch {
+		case unicode.IsUpper(ch):
+			hasUpper = true
+		case unicode.IsLower(ch):
+			hasLower = true
+		case unicode.IsDigit(ch):
+			hasNumber = true
+		case unicode.IsPunct(ch) || unicode.IsSymbol(ch):
+			hasSpecial = true
+		}
+	}
+
+	// Require at least 3 of 4 character types
+	var count int
+	if hasUpper {
+		count++
+	}
+	if hasLower {
+		count++
+	}
+	if hasNumber {
+		count++
+	}
+	if hasSpecial {
+		count++
+	}
+
+	if count < 3 {
+		return errors.New("password must include at least 3 of: uppercase, lowercase, number, special character")
+	}
+
+	return nil
+}
 
 // MaskSensitiveString Mask sensitive strings, showing only first 4 and last 4 characters
 // Used to mask API Key, Secret Key, Private Key and other sensitive information

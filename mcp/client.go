@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"nofx/security"
 	"strings"
 	"time"
 )
@@ -315,6 +316,11 @@ func (client *Client) call(systemPrompt, userPrompt string) (string, error) {
 	req, err := client.hooks.buildRequest(url, jsonData)
 	if err != nil {
 		return "", fmt.Errorf("failed to create request: %w", err)
+	}
+
+	// Step 4.5: SSRF protection - validate URL before sending
+	if err := security.ValidateURL(url); err != nil {
+		return "", fmt.Errorf("SSRF protection blocked request: %w", err)
 	}
 
 	// Step 5: Send HTTP request (fixed logic)
