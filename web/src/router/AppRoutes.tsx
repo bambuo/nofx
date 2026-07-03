@@ -225,6 +225,7 @@ function TradersRoute({
 
 function DashboardRoute() {
   const { user, token } = useAuth()
+  const { language } = useLanguage()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const selectedTraderSlug = searchParams.get('trader') || undefined
@@ -367,6 +368,7 @@ function DashboardRoute() {
         decisions={decisions}
         traders={traders}
         selectedTraderId={selectedTraderId}
+        language={language}
         onTraderSelect={(traderId) => {
           setSelectedTraderId(traderId)
           const trader = traders?.find((item) => item.trader_id === traderId)

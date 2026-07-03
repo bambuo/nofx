@@ -1,5 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 
+function td(lang: string, zh: string, id: string, en: string) {
+  return lang === 'zh' ? zh : lang === 'id' ? id : en
+}
+
 /**
  * OrderBook renders a live L2 depth ladder for a single instrument, streamed
  * directly from Hyperliquid's public WebSocket (`l2Book`). The app trades a
@@ -55,9 +59,10 @@ interface OrderBookProps {
   symbol: string
   /** optional entry price to mark the user's position level on the ladder */
   markPrice?: number
+  language?: string
 }
 
-export function OrderBook({ symbol, markPrice }: OrderBookProps) {
+export function OrderBook({ symbol, markPrice, language = 'en' }: OrderBookProps) {
   const base = useMemo(() => baseSymbol(symbol || ''), [symbol])
   const [xyzSet, setXyzSet] = useState<Set<string>>(new Set())
   const [book, setBook] = useState<BookState | null>(null)
@@ -189,25 +194,25 @@ export function OrderBook({ symbol, markPrice }: OrderBookProps) {
   return (
     <div style={{ fontFamily: 'var(--tm-mono)' }}>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 6 }}>
-        <span className="tm-px" style={{ fontSize: 11 }}>Order book</span>
+        <span className="tm-px" style={{ fontSize: 11 }}>{td(language, '订单簿', 'Buku Pesanan', 'Order book')}</span>
         <span className="tm-sc">L2 · {coin || base || '—'}</span>
         <span
           className="tm-sc"
           style={{ marginLeft: 'auto', color: status === 'live' ? 'var(--tm-up)' : 'var(--tm-muted)' }}
         >
-          {status === 'live' ? '● live' : status === 'connecting' ? '○ sync' : '○ down'}
+          {status === 'live' ? td(language, '● 实时', '● langsung', '● live') : status === 'connecting' ? td(language, '○ 同步', '○ sinkron', '○ sync') : td(language, '○ 断开', '○ turun', '○ down')}
         </span>
       </div>
 
       {!view ? (
-        <div className="tm-sc" style={{ padding: '16px 0' }}>Connecting to Hyperliquid…</div>
+        <div className="tm-sc" style={{ padding: '16px 0' }}>{td(language, '正在连接 Hyperliquid…', 'Menghubungkan ke Hyperliquid…', 'Connecting to Hyperliquid…')}</div>
       ) : (
         <div style={{ fontSize: 11 }}>
           {/* column header */}
           <div className="tm-sc" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 4, marginBottom: 2 }}>
-            <span>price</span>
-            <span style={{ textAlign: 'right' }}>size</span>
-            <span style={{ textAlign: 'right' }}>cum $</span>
+            <span>{td(language, '价格', 'harga', 'price')}</span>
+            <span style={{ textAlign: 'right' }}>{td(language, '数量', 'ukuran', 'size')}</span>
+            <span style={{ textAlign: 'right' }}>{td(language, '累计 $', 'kum $', 'cum $')}</span>
           </div>
 
           {/* asks (red), best ask nearest the mid — keyed by PRICE so each level
@@ -230,7 +235,7 @@ export function OrderBook({ symbol, markPrice }: OrderBookProps) {
             }}
           >
             <span className="tm-px" style={{ fontSize: 12, color: 'var(--tm-red)' }}>{fmtPx(view.mid)}</span>
-            <span className="tm-sc" style={{ marginLeft: 'auto' }}>spread {fmtPx(view.spread)} · {view.spreadBps.toFixed(1)}bps</span>
+            <span className="tm-sc" style={{ marginLeft: 'auto' }}>{td(language, '价差', 'selisih', 'spread')} {fmtPx(view.spread)} · {view.spreadBps.toFixed(1)}bps</span>
           </div>
 
           {/* bids (green) — keyed by price, same independent-flash behavior */}
@@ -245,8 +250,8 @@ export function OrderBook({ symbol, markPrice }: OrderBookProps) {
               <div style={{ flex: 1, background: 'var(--tm-dn)' }} />
             </div>
             <div className="tm-sc" style={{ display: 'flex', fontSize: 9, marginTop: 2 }}>
-              <span className="tm-up">B {view.bidPct.toFixed(1)}%</span>
-              <span style={{ marginLeft: 'auto' }} className="tm-dn">{(100 - view.bidPct).toFixed(1)}% S</span>
+              <span className="tm-up">{td(language, '买', 'B', 'B')} {view.bidPct.toFixed(1)}%</span>
+              <span style={{ marginLeft: 'auto' }} className="tm-dn">{(100 - view.bidPct).toFixed(1)}% {td(language, '卖', 'S', 'S')}</span>
             </div>
           </div>
         </div>

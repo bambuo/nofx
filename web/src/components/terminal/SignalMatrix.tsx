@@ -1,6 +1,10 @@
 import { useMemo } from 'react'
 import type { SignalRankItem } from '../../lib/api/data'
 
+function td(lang: string, zh: string, id: string, en: string) {
+  return lang === 'zh' ? zh : lang === 'id' ? id : en
+}
+
 /**
  * SignalMatrix renders the vergex (claw402) signal ranking as a high-density
  * heatmap grid — one cell per symbol, colored by directional bias (green =
@@ -56,9 +60,10 @@ interface SignalMatrixProps {
   active?: string
   /** click a cell to switch the active instrument */
   onSelect?: (symbol: string) => void
+  language?: string
 }
 
-export function SignalMatrix({ items, max = 36, active, onSelect }: SignalMatrixProps) {
+export function SignalMatrix({ items, max = 36, active, onSelect, language = 'en' }: SignalMatrixProps) {
   const view = useMemo(() => {
     const raw = items ?? []
     const sorted = [...raw].sort((a, b) => a.rank - b.rank).slice(0, max)
@@ -88,8 +93,8 @@ export function SignalMatrix({ items, max = 36, active, onSelect }: SignalMatrix
   if (!view.cells.length) {
     return (
       <div style={{ fontFamily: 'var(--tm-mono)' }}>
-        <Head />
-        <div className="tm-sc">No signal data (claw402).</div>
+        <Head language={language} />
+        <div className="tm-sc">{td(language, '暂无信号数据（claw402）。', 'Tidak ada data sinyal (claw402).', 'No signal data (claw402).')}</div>
       </div>
     )
   }
@@ -103,11 +108,11 @@ export function SignalMatrix({ items, max = 36, active, onSelect }: SignalMatrix
         className="tm-sc"
         style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 6, fontSize: 9 }}
       >
-        <Swatch c="var(--tm-up)" label="Bullish" />
-        <Swatch c="var(--tm-dn)" label="Bearish" />
-        <Swatch c="var(--tm-muted)" label="Neutral" />
-        {onSelect && <span style={{ color: 'var(--tm-red)' }}>click to switch ▸</span>}
-        <span style={{ marginLeft: 'auto' }}>{view.cells.length} signals</span>
+        <Swatch c="var(--tm-up)" label={td(language, '看涨', 'Bullish', 'Bullish')} />
+        <Swatch c="var(--tm-dn)" label={td(language, '看跌', 'Bearish', 'Bearish')} />
+        <Swatch c="var(--tm-muted)" label={td(language, '中性', 'Netral', 'Neutral')} />
+        {onSelect && <span style={{ color: 'var(--tm-red)' }}>{td(language, '点击切换 ▸', 'klik untuk beralih ▸', 'click to switch ▸')}</span>}
+        <span style={{ marginLeft: 'auto' }}>{view.cells.length} {td(language, '信号', 'sinyal', 'signals')}</span>
       </div>
 
       <div
@@ -123,7 +128,7 @@ export function SignalMatrix({ items, max = 36, active, onSelect }: SignalMatrix
           return (
           <div
             key={`${c.rank}-${c.symbol}`}
-            title={`${base} · #${c.rank} · ${c.bias} · ${c.score} — click to switch`}
+            title={`${base} · #${c.rank} · ${c.bias} · ${c.score} — ${td(language, '点击切换', 'klik untuk beralih', 'click to switch')}`}
             onClick={onSelect ? () => onSelect(base) : undefined}
             style={{
               padding: '4px 5px',
@@ -171,11 +176,11 @@ function fmtScore(n: number): string {
   return n.toFixed(2)
 }
 
-function Head() {
+function Head({ language = 'en' }: { language?: string }) {
   return (
     <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 6 }}>
-      <span className="tm-px" style={{ fontSize: 11 }}>Signal matrix</span>
-      <span className="tm-sc">Signal matrix · vergex</span>
+      <span className="tm-px" style={{ fontSize: 11 }}>{td(language, '信号矩阵', 'Matriks Sinyal', 'Signal matrix')}</span>
+      <span className="tm-sc">{td(language, '信号矩阵 · vergex', 'Matriks Sinyal · vergex', 'Signal matrix · vergex')}</span>
     </div>
   )
 }

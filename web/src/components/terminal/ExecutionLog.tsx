@@ -1,6 +1,10 @@
 import { useMemo } from 'react'
 import type { DecisionRecord } from '../../types'
 
+function td(lang: string, zh: string, id: string, en: string) {
+  return lang === 'zh' ? zh : lang === 'id' ? id : en
+}
+
 /**
  * ExecutionLog renders the AI trading agent's real decisions and order results
  * as a high-density, newest-first terminal stream — Bloomberg-style log on the
@@ -99,9 +103,10 @@ function cleanLog(raw: string): string {
 interface ExecutionLogProps {
   decisions?: DecisionRecord[]
   height?: number
+  language?: string
 }
 
-export function ExecutionLog({ decisions, height = 440 }: ExecutionLogProps) {
+export function ExecutionLog({ decisions, height = 440, language = 'en' }: ExecutionLogProps) {
   // Newest cycle first.
   const cycles = useMemo(() => {
     const list = decisions ?? []
@@ -112,16 +117,16 @@ export function ExecutionLog({ decisions, height = 440 }: ExecutionLogProps) {
     <div style={{ fontFamily: 'var(--tm-mono)' }}>
       {/* header */}
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 2 }}>
-        <span className="tm-px" style={{ fontSize: 11 }}>Execution log</span>
+        <span className="tm-px" style={{ fontSize: 11 }}>{td(language, '执行日志', 'Log Eksekusi', 'Execution log')}</span>
         <span
           className="tm-sc"
           style={{ marginLeft: 'auto', color: cycles.length ? 'var(--tm-up)' : 'var(--tm-muted)' }}
         >
-          {cycles.length ? `${cycles.length} cyc` : '—'}
+          {cycles.length ? `${cycles.length} ${td(language, '周期', 'siklus', 'cyc')}` : '—'}
         </span>
       </div>
       <div className="tm-sc" style={{ fontSize: 9, marginBottom: 5 }}>
-        Execution log · AI decisions & fills per cycle
+        {td(language, '执行日志 · 每个周期的 AI 决策与成交', 'Log Eksekusi · keputusan AI & pengisian per siklus', 'Execution log · AI decisions & fills per cycle')}
       </div>
 
       {/* legend */}
@@ -129,15 +134,15 @@ export function ExecutionLog({ decisions, height = 440 }: ExecutionLogProps) {
         className="tm-sc"
         style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: 6, fontSize: 9 }}
       >
-        <Legend glyph="✓" c="var(--tm-up)" label="ok" />
-        <Legend glyph="⚠" c={C_AMBER} label="throttle" />
-        <Legend glyph="❌" c="var(--tm-dn)" label="risk" />
+        <Legend glyph="✓" c="var(--tm-up)" label={td(language, '正常', 'ok', 'ok')} />
+        <Legend glyph="⚠" c={C_AMBER} label={td(language, '限流', 'throttle', 'throttle')} />
+        <Legend glyph="❌" c="var(--tm-dn)" label={td(language, '风控', 'risiko', 'risk')} />
       </div>
 
       <div className="tm-hair" style={{ marginBottom: 0 }} />
 
       {!cycles.length ? (
-        <div className="tm-sc" style={{ padding: '16px 0' }}>No execution events yet.</div>
+        <div className="tm-sc" style={{ padding: '16px 0' }}>{td(language, '暂无执行事件。', 'Belum ada event eksekusi.', 'No execution events yet.')}</div>
       ) : (
         <div
           style={{
@@ -149,7 +154,7 @@ export function ExecutionLog({ decisions, height = 440 }: ExecutionLogProps) {
           }}
         >
           {cycles.map((c) => (
-            <Cycle key={`${c.cycle_number}-${c.timestamp}`} record={c} />
+            <Cycle key={`${c.cycle_number}-${c.timestamp}`} record={c} language={language} />
           ))}
         </div>
       )}
@@ -168,9 +173,10 @@ function Legend({ glyph, c, label }: { glyph: string; c: string; label: string }
 
 interface CycleProps {
   record: DecisionRecord
+  language?: string
 }
 
-function Cycle({ record }: CycleProps) {
+function Cycle({ record, language = 'en' }: CycleProps) {
   const time = fmtTime(record.timestamp)
   const actions = record.decisions ?? []
   const logs = record.execution_log ?? []
@@ -193,11 +199,11 @@ function Cycle({ record }: CycleProps) {
           color: 'var(--tm-ink-2)',
         }}
       >
-        <span style={{ color: 'var(--tm-ink)', fontWeight: 700 }}>CYCLE {record.cycle_number}</span>
+        <span style={{ color: 'var(--tm-ink)', fontWeight: 700 }}>{td(language, '周期', 'SIKLUS', 'CYCLE')} {record.cycle_number}</span>
         <span style={{ color: 'var(--tm-muted)' }}>·</span>
         <span style={{ color: 'var(--tm-muted)' }}>{time}</span>
         <span style={{ marginLeft: 'auto', color: 'var(--tm-muted)' }}>
-          {count === 0 ? 'no action' : `${count} action${count > 1 ? 's' : ''}`}
+          {count === 0 ? td(language, '无操作', 'tidak ada tindakan', 'no action') : `${count} ${td(language, '操作', 'tindakan', 'action')}${count > 1 ? 's' : ''}`}
         </span>
         {!record.success ? (
           <span style={{ color: 'var(--tm-dn)', fontWeight: 700 }}>FAULT</span>

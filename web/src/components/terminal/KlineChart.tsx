@@ -4,6 +4,10 @@ import { api } from '../../lib/api'
 import type { Kline } from '../../lib/api/data'
 import { Candles } from './Candles'
 
+function td(lang: string, zh: string, id: string, en: string) {
+  return lang === 'zh' ? zh : lang === 'id' ? id : en
+}
+
 /**
  * KlineChart shows a live candlestick chart. History is seeded from the backend
  * kline endpoint, then the latest bar streams in real time from Hyperliquid's
@@ -29,9 +33,10 @@ interface KlineChartProps {
   height?: number
   /** stretch the chart to fill the parent's remaining height */
   fill?: boolean
+  language?: string
 }
 
-export function KlineChart({ symbol, height = 360, fill = false }: KlineChartProps) {
+export function KlineChart({ symbol, height = 360, fill = false, language = 'en' }: KlineChartProps) {
   const base = baseSymbol(symbol || '')
 
   // history seed (resynced occasionally; the WS carries the live bar)
@@ -135,17 +140,17 @@ export function KlineChart({ symbol, height = 360, fill = false }: KlineChartPro
   return (
     <div style={{ fontFamily: 'var(--tm-mono)', ...(fill ? { display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 } : {}) }}>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 6 }}>
-        <span className="tm-px" style={{ fontSize: 11 }}>{base || 'MARKET'}</span>
-        <span className="tm-sc">{INTERVAL} · Live candles</span>
+        <span className="tm-px" style={{ fontSize: 11 }}>{base || td(language, '市场', 'PASAR', 'MARKET')}</span>
+        <span className="tm-sc">{INTERVAL} · {td(language, '实时蜡烛图', 'Lilin langsung', 'Live candles')}</span>
         <span className="tm-sc" style={{ marginLeft: 'auto', color: live ? 'var(--tm-up)' : 'var(--tm-muted)' }}>
-          {live ? '● live' : isLoading || candles.length ? '○ sync' : '○ —'}
+          {live ? td(language, '● 实时', '● langsung', '● live') : isLoading || candles.length ? td(language, '○ 同步', '○ sinkron', '○ sync') : '○ —'}
         </span>
       </div>
       {last > 0 && (
         <div className="tm-mono" style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 4, fontSize: 12 }}>
           <span style={{ fontWeight: 600 }}>${last.toLocaleString('en-US', { maximumFractionDigits: 4 })}</span>
           <span className={chg >= 0 ? 'tm-up' : 'tm-dn'} style={{ fontSize: 11 }}>{chg >= 0 ? '+' : ''}{chg.toFixed(2)}%</span>
-          <span className="tm-sc" style={{ marginLeft: 'auto' }}>{candles.length} bars · {INTERVAL}</span>
+          <span className="tm-sc" style={{ marginLeft: 'auto' }}>{candles.length} {td(language, '根K线', 'bar', 'bars')} · {INTERVAL}</span>
         </div>
       )}
       {candles.length > 0 ? (
@@ -157,7 +162,7 @@ export function KlineChart({ symbol, height = 360, fill = false }: KlineChartPro
           <Candles data={candles} width={380} height={height} />
         )
       ) : (
-        <div className="tm-sc" style={{ padding: '20px 0' }}>Loading market…</div>
+        <div className="tm-sc" style={{ padding: '20px 0' }}>{td(language, '正在加载市场…', 'Memuat pasar…', 'Loading market…')}</div>
       )}
     </div>
   )

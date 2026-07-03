@@ -31,7 +31,12 @@ const ROW1_H = 500
 import { FlowMarkets } from './FlowMarkets'
 import './terminal.css'
 
+function td(lang: string, zh: string, id: string, en: string) {
+  return lang === 'zh' ? zh : lang === 'id' ? id : en
+}
+
 interface TerminalDashboardProps {
+  language?: string
   selectedTrader?: TraderInfo
   traders?: TraderInfo[]
   selectedTraderId?: string
@@ -84,6 +89,7 @@ function useTick(ms = 1000) {
 }
 
 export function TerminalDashboard({
+  language = 'en',
   selectedTrader,
   traders,
   selectedTraderId,
@@ -241,15 +247,15 @@ export function TerminalDashboard({
       {navSlot &&
         createPortal(
           <span className="nofx-terminal" style={{ background: 'transparent', display: 'flex', alignItems: 'center', gap: 12, marginLeft: 16, paddingLeft: 16, borderLeft: '1px solid rgba(26,24,19,0.15)', fontSize: 11 }}>
-            <span className="tm-sc" style={{ color: 'var(--tm-muted)' }}>orchestration</span>
+            <span className="tm-sc" style={{ color: 'var(--tm-muted)' }}>{td(language, '编排', 'orkestrasi', 'orchestration')}</span>
             {traders && traders.length > 0 && (
               <select value={traderId || ''} onChange={(e) => onTraderSelect(e.target.value)} className="tm-mono"
                 style={{ background: 'var(--tm-panel)', color: 'var(--tm-ink)', border: '1px solid var(--tm-hair)', borderRadius: 0, fontSize: 11, padding: '3px 6px' }}>
                 {traders.map((t) => (<option key={t.trader_id} value={t.trader_id} style={{ color: '#111' }}>{t.trader_name}</option>))}
               </select>
             )}
-            <span style={{ color: running ? 'var(--tm-up)' : 'var(--tm-muted)' }}>{running ? '● running' : '○ stopped'}</span>
-            <span className="tm-sc" style={{ color: 'var(--tm-muted)' }}>cycle</span><span className="tm-mono" style={{ color: 'var(--tm-ink)' }}>{status?.call_count ?? '—'}</span>
+            <span style={{ color: running ? 'var(--tm-up)' : 'var(--tm-muted)' }}>{running ? `● ${td(language, '运行中', 'berjalan', 'running')}` : `○ ${td(language, '已停止', 'berhenti', 'stopped')}`}</span>
+            <span className="tm-sc" style={{ color: 'var(--tm-muted)' }}>{td(language, '周期', 'siklus', 'cycle')}</span><span className="tm-mono" style={{ color: 'var(--tm-ink)' }}>{status?.call_count ?? '—'}</span>
             <span className="tm-px" style={{ fontSize: 12, color: 'var(--tm-ink)' }}>{clock}</span>
           </span>,
           navSlot,
@@ -258,31 +264,31 @@ export function TerminalDashboard({
         {/* config / identity strip — first row, flows directly under the global nav */}
         <div className="tm-mono" style={{ display: 'flex', gap: 16, padding: '6px 14px', fontSize: 11, color: 'var(--tm-ink-2)', flexWrap: 'wrap' }}>
           <span style={{ fontWeight: 500 }}>{selectedTrader?.trader_name ?? 'NOFX'}</span>
-          <span><span className="tm-sc">model </span>{(() => {
+          <span><span className="tm-sc">{td(language, '模型', 'model', 'model')} </span>{(() => {
             const raw = config?.ai_model || status?.ai_model || ''
             if (!raw) return '—'
             if (/claw402/i.test(raw)) return 'CLAW402'
             return raw.length > 16 ? raw.slice(0, 16).toUpperCase() : raw.toUpperCase()
           })()}</span>
-          <span><span className="tm-sc">strategy </span>{config?.strategy_name || selectedTrader?.strategy_name || '—'}</span>
-          <span><span className="tm-sc">lev </span>{config?.btc_eth_leverage ?? '—'}× / {config?.altcoin_leverage ?? '—'}×</span>
-          <span><span className="tm-sc">scan </span>{scanMin}m</span>
-          <span><span className="tm-sc">universe </span>{candidateCoins.length}</span>
-          <span><span className="tm-sc">positions </span>{positions?.length ?? 0}</span>
-          <span style={{ marginLeft: 'auto' }}><span className="tm-sc">next cycle </span>{countdown}</span>
+          <span><span className="tm-sc">{td(language, '策略', 'strategi', 'strategy')} </span>{config?.strategy_name || selectedTrader?.strategy_name || '—'}</span>
+          <span><span className="tm-sc">{td(language, '杠杆', 'leverase', 'lev')} </span>{config?.btc_eth_leverage ?? '—'}× / {config?.altcoin_leverage ?? '—'}×</span>
+          <span><span className="tm-sc">{td(language, '扫描', 'pindai', 'scan')} </span>{scanMin}m</span>
+          <span><span className="tm-sc">{td(language, '品种池', 'semesta', 'universe')} </span>{candidateCoins.length}</span>
+          <span><span className="tm-sc">{td(language, '持仓', 'posisi', 'positions')} </span>{positions?.length ?? 0}</span>
+          <span style={{ marginLeft: 'auto' }}><span className="tm-sc">{td(language, '下一周期', 'siklus berikutnya', 'next cycle')} </span>{countdown}</span>
         </div>
         <div className="tm-rule" />
 
         {/* metric row */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)' }}>
           {[
-            { l: 'Equity', v: fmtUsd(account?.total_equity), c: 'var(--tm-ink)' },
-            { l: 'Total P/L', v: `${fmtUsd(pnl, true)} (${fmtPct(pnlPct)})`, c: up ? 'var(--tm-up)' : 'var(--tm-dn)' },
-            { l: 'Win rate', v: fullStats != null ? `${fullStats.win_rate.toFixed(1)}%` : '—', c: 'var(--tm-ink)' },
-            { l: 'Profit factor', v: fullStats != null ? fullStats.profit_factor.toFixed(2) : '—', c: 'var(--tm-ink)' },
-            { l: 'Max drawdown', v: fullStats != null ? `-${(fullStats.max_drawdown_pct * 100).toFixed(1)}%` : '—', c: 'var(--tm-dn)' },
+            { l: td(language, '净值', 'Ekuitas', 'Equity'), v: fmtUsd(account?.total_equity), c: 'var(--tm-ink)' },
+            { l: td(language, '总盈亏', 'Total P/L', 'Total P/L'), v: `${fmtUsd(pnl, true)} (${fmtPct(pnlPct)})`, c: up ? 'var(--tm-up)' : 'var(--tm-dn)' },
+            { l: td(language, '胜率', 'Tingkat menang', 'Win rate'), v: fullStats != null ? `${fullStats.win_rate.toFixed(1)}%` : '—', c: 'var(--tm-ink)' },
+            { l: td(language, '盈亏比', 'Faktor profit', 'Profit factor'), v: fullStats != null ? fullStats.profit_factor.toFixed(2) : '—', c: 'var(--tm-ink)' },
+            { l: td(language, '最大回撤', 'Penarikan maks', 'Max drawdown'), v: fullStats != null ? `-${(fullStats.max_drawdown_pct * 100).toFixed(1)}%` : '—', c: 'var(--tm-dn)' },
           ].map((m, i) => (
-            <div key={m.l} style={{ padding: '12px 14px', borderRight: i < 4 ? cellBorder : 'none' }}>
+            <div key={i} style={{ padding: '12px 14px', borderRight: i < 4 ? cellBorder : 'none' }}>
               <div className="tm-sc">{m.l}</div>
               <div className="tm-mono" style={{ fontSize: 17, fontWeight: 500, color: m.c, marginTop: 3 }}>{m.v}</div>
             </div>
@@ -294,12 +300,12 @@ export function TerminalDashboard({
         {fullStats != null && (
           <>
             <div className="tm-mono" style={{ display: 'flex', gap: 18, padding: '6px 14px', fontSize: 11, color: 'var(--tm-ink-2)', flexWrap: 'wrap' }}>
-              <span className="tm-sc">trades <b style={{ color: 'var(--tm-ink)' }}>{fullStats.total_trades}</b></span>
-              <span className="tm-sc tm-up">win {fullStats.win_trades}</span>
-              <span className="tm-sc tm-dn">loss {fullStats.loss_trades}</span>
+              <span className="tm-sc">{td(language, '交易', 'perdagangan', 'trades')} <b style={{ color: 'var(--tm-ink)' }}>{fullStats.total_trades}</b></span>
+              <span className="tm-sc tm-up">{td(language, '赢', 'menang', 'win')} {fullStats.win_trades}</span>
+              <span className="tm-sc tm-dn">{td(language, '亏', 'kalah', 'loss')} {fullStats.loss_trades}</span>
               <span className="tm-sc">sharpe <b style={{ color: 'var(--tm-ink)' }}>{fullStats.sharpe_ratio.toFixed(2)}</b></span>
-              <span className="tm-sc">avg win/loss <b style={{ color: 'var(--tm-ink)' }}>{fullStats.avg_win.toFixed(2)}/{fullStats.avg_loss.toFixed(2)}</b></span>
-              <span className="tm-sc">fees <b style={{ color: 'var(--tm-ink)' }}>{fmtUsd(fullStats.total_fee)}</b></span>
+              <span className="tm-sc">{td(language, '平均赢/亏', 'rata-rata menang/kalah', 'avg win/loss')} <b style={{ color: 'var(--tm-ink)' }}>{fullStats.avg_win.toFixed(2)}/{fullStats.avg_loss.toFixed(2)}</b></span>
+              <span className="tm-sc">{td(language, '费用', 'biaya', 'fees')} <b style={{ color: 'var(--tm-ink)' }}>{fmtUsd(fullStats.total_fee)}</b></span>
             </div>
             <div className="tm-rule" />
           </>
@@ -317,17 +323,18 @@ export function TerminalDashboard({
               symbol={activeSym}
               marketType={CRYPTO_MAJORS.has(activeSym) ? 'perp' : 'hip3_perp'}
               height={ROW1_H - 130}
+              language={language}
             />
           </div>
           <div style={{ ...sc, borderRight: cellBorder, height: ROW1_H, overflow: 'hidden' }}>
-            <OrderBook symbol={activeSym} markPrice={positions?.find((p) => baseLabel(p.symbol) === activeSym)?.entry_price} />
+            <OrderBook symbol={activeSym} markPrice={positions?.find((p) => baseLabel(p.symbol) === activeSym)?.entry_price} language={language} />
           </div>
           <div style={{ ...sc, height: ROW1_H, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-            <SignalMatrix items={signalRank?.items} active={activeSym} onSelect={setSelectedSym} />
+            <SignalMatrix items={signalRank?.items} active={activeSym} onSelect={setSelectedSym} language={language} />
             {/* the live K-line always sits under the selector and flexes to fill */}
             <div className="tm-rule" style={{ margin: '10px 0 8px' }} />
             <div style={{ flex: 1, minHeight: 0 }}>
-              <KlineChart symbol={activeSym} fill />
+              <KlineChart symbol={activeSym} fill language={language} />
             </div>
           </div>
         </div>
@@ -336,8 +343,8 @@ export function TerminalDashboard({
         {/* orchestration topology — second row, full width (the agent workflow) */}
         <div style={sc}>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 4 }}>
-            <span className="tm-px" style={{ fontSize: 12 }}>Orchestration topology</span>
-            <span className="tm-sc">Orchestration topology · net inflow → signal → execute → hold</span>
+            <span className="tm-px" style={{ fontSize: 12 }}>{td(language, '编排拓扑', 'Topologi orkestrasi', 'Orchestration topology')}</span>
+            <span className="tm-sc">{td(language, '编排拓扑 · 净流入 → 信号 → 执行 → 持仓', 'Topologi orkestrasi · arus masuk → sinyal → eksekusi → tahan', 'Orchestration topology · net inflow → signal → execute → hold')}</span>
           </div>
           <OrchestrationTopology
             layers={[
@@ -395,27 +402,27 @@ export function TerminalDashboard({
         {/* ── row 3: execution log · risk radar · recent trades ── */}
         <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.1fr) minmax(0,1fr) minmax(0,1fr)' }}>
           <div style={{ ...sc, borderRight: cellBorder }}>
-            <ExecutionLog decisions={decisions} height={432} />
+            <ExecutionLog decisions={decisions} height={432} language={language} />
           </div>
           <div style={{ ...sc, borderRight: cellBorder }}>
-            <RiskRadar positions={positions} account={account} config={config} fullStats={fullStats} />
+            <RiskRadar positions={positions} account={account} config={config} fullStats={fullStats} language={language} />
           </div>
           <div style={sc}>
             {/* live open positions (the book right now) */}
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 6 }}>
-              <span className="tm-px" style={{ fontSize: 11 }}>Positions</span>
-              <span className="tm-sc">Current positions · live</span>
-              <span className="tm-sc" style={{ marginLeft: 'auto' }}>{positions?.length ?? 0} open</span>
+              <span className="tm-px" style={{ fontSize: 11 }}>{td(language, '持仓', 'Posisi', 'Positions')}</span>
+              <span className="tm-sc">{td(language, '当前持仓 · 实时', 'Posisi saat ini · langsung', 'Current positions · live')}</span>
+              <span className="tm-sc" style={{ marginLeft: 'auto' }}>{positions?.length ?? 0} {td(language, '开仓', 'buka', 'open')}</span>
             </div>
             {positions && positions.length > 0 ? (
               <table className="tm-mono" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
                 <thead>
                   <tr className="tm-sc" style={{ fontSize: 9 }}>
-                    <td style={{ padding: '0 0 3px' }}>symbol</td>
-                    <td style={{ padding: '0 0 3px' }}>side</td>
-                    <td style={{ padding: '0 0 3px', textAlign: 'right' }}>lev</td>
+                    <td style={{ padding: '0 0 3px' }}>{td(language, '品种', 'simbol', 'symbol')}</td>
+                    <td style={{ padding: '0 0 3px' }}>{td(language, '方向', 'sisi', 'side')}</td>
+                    <td style={{ padding: '0 0 3px', textAlign: 'right' }}>{td(language, '杠杆', 'leverase', 'lev')}</td>
                     <td style={{ padding: '0 0 3px', textAlign: 'right' }}>PnL</td>
-                    <td style={{ padding: '0 0 3px', textAlign: 'right' }}>return%</td>
+                    <td style={{ padding: '0 0 3px', textAlign: 'right' }}>{td(language, '回报%', 'pengembalian%', 'return%')}</td>
                   </tr>
                 </thead>
                 <tbody>
@@ -425,7 +432,7 @@ export function TerminalDashboard({
                     return (
                       <tr key={`${p.symbol}-${i}`} style={{ borderTop: '1px solid var(--tm-hair)' }}>
                         <td style={{ padding: '5px 0', fontWeight: 500 }}>{baseLabel(p.symbol)}</td>
-                        <td style={{ padding: '5px 0' }} className={long ? 'tm-up' : 'tm-dn'}>{long ? 'long' : 'short'}</td>
+                        <td style={{ padding: '5px 0' }} className={long ? 'tm-up' : 'tm-dn'}>{long ? td(language, '多头', 'panjang', 'long') : td(language, '空头', 'pendek', 'short')}</td>
                         <td style={{ padding: '5px 0', textAlign: 'right', color: 'var(--tm-muted)' }}>{p.leverage}×</td>
                         <td style={{ padding: '5px 0', textAlign: 'right' }} className={win ? 'tm-up' : 'tm-dn'}>{fmtUsd(p.unrealized_pnl, true)}</td>
                         <td style={{ padding: '5px 0', textAlign: 'right' }} className={win ? 'tm-up' : 'tm-dn'}>{(p.unrealized_pnl_pct ?? 0).toFixed(2)}%</td>
@@ -434,13 +441,13 @@ export function TerminalDashboard({
                   })}
                 </tbody>
               </table>
-            ) : <div className="tm-sc" style={{ padding: '8px 0' }}>No open positions.</div>}
+            ) : <div className="tm-sc" style={{ padding: '8px 0' }}>{td(language, '无开仓仓位。', 'Tidak ada posisi terbuka.', 'No open positions.')}</div>}
 
             <div className="tm-rule" style={{ margin: '12px 0 10px' }} />
 
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 6 }}>
-              <span className="tm-px" style={{ fontSize: 11 }}>Recent trades</span>
-              <span className="tm-sc">Recent closes · symbol/side/time/pnl</span>
+              <span className="tm-px" style={{ fontSize: 11 }}>{td(language, '最近交易', 'Perdagangan terbaru', 'Recent trades')}</span>
+              <span className="tm-sc">{td(language, '最近平仓 · 品种/方向/时间/盈亏', 'Penutupan terbaru · simbol/sisi/waktu/pnl', 'Recent closes · symbol/side/time/pnl')}</span>
             </div>
             {recentTrades.length > 0 ? (
               <table className="tm-mono" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
@@ -458,7 +465,7 @@ export function TerminalDashboard({
                   })}
                 </tbody>
               </table>
-            ) : <div className="tm-sc" style={{ padding: '8px 0' }}>No closed trades yet.</div>}
+            ) : <div className="tm-sc" style={{ padding: '8px 0' }}>{td(language, '暂无平仓交易。', 'Belum ada perdagangan tertutup.', 'No closed trades yet.')}</div>}
           </div>
         </div>
         <div className="tm-rule" />
@@ -467,29 +474,29 @@ export function TerminalDashboard({
         <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.5fr) minmax(0,1fr)' }}>
           <div style={{ ...sc, borderRight: cellBorder }}>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 8 }}>
-              <span className="tm-px" style={{ fontSize: 12 }}>Market net inflow</span>
-              <span className="tm-sc">Market net inflow · {flow?.data?.window || '1h'} · Vergex</span>
-              <span className="tm-sc" style={{ marginLeft: 'auto' }}>{flowItems.length} markets</span>
+              <span className="tm-px" style={{ fontSize: 12 }}>{td(language, '市场净流入', 'Arus masuk bersih pasar', 'Market net inflow')}</span>
+              <span className="tm-sc">{td(language, '市场净流入 · ', 'Arus masuk bersih pasar · ', 'Market net inflow · ')}{flow?.data?.window || '1h'} · Vergex</span>
+              <span className="tm-sc" style={{ marginLeft: 'auto' }}>{flowItems.length} {td(language, '市场', 'pasar', 'markets')}</span>
             </div>
-            <FlowMarkets items={flowItems} window={flow?.data?.window} />
+            <FlowMarkets items={flowItems} window={flow?.data?.window} language={language} />
           </div>
           <div style={sc}>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 8 }}>
-              <span className="tm-px" style={{ fontSize: 11 }}>By symbol</span>
-              <span className="tm-sc">By-symbol history · trades/win/pnl</span>
+              <span className="tm-px" style={{ fontSize: 11 }}>{td(language, '按品种', 'Berdasarkan simbol', 'By symbol')}</span>
+              <span className="tm-sc">{td(language, '分品种历史 · 交易/赢/盈亏', 'Riwayat per simbol · perdagangan/menang/pnl', 'By-symbol history · trades/win/pnl')}</span>
             </div>
             {symbolStats.length > 0 ? symbolStats.map((s) => (
               <div key={s.symbol} style={{ marginBottom: 7 }}>
                 <div className="tm-mono" style={{ display: 'flex', fontSize: 11, marginBottom: 2 }}>
                   <span style={{ fontWeight: 500 }}>{baseLabel(s.symbol)}</span>
-                  <span className="tm-sc" style={{ marginLeft: 8 }}>{s.total_trades} trades · {s.win_rate.toFixed(0)}% win</span>
+                  <span className="tm-sc" style={{ marginLeft: 8 }}>{s.total_trades} {td(language, '交易', 'perdagangan', 'trades')} · {s.win_rate.toFixed(0)}% {td(language, '赢', 'menang', 'win')}</span>
                   <span className={s.total_pnl >= 0 ? 'tm-up' : 'tm-dn'} style={{ marginLeft: 'auto' }}>{fmtUsd(s.total_pnl, true)}</span>
                 </div>
                 <div style={{ height: 4, background: 'var(--tm-hair)' }}>
                   <div style={{ height: 4, width: `${(s.total_trades / maxSymTrades) * 100}%`, background: s.total_pnl >= 0 ? 'var(--tm-up)' : 'var(--tm-dn)' }} />
                 </div>
               </div>
-            )) : <div className="tm-sc">No symbol history.</div>}
+            )) : <div className="tm-sc">{td(language, '暂无品种历史。', 'Tidak ada riwayat simbol.', 'No symbol history.')}</div>}
           </div>
         </div>
       </div>

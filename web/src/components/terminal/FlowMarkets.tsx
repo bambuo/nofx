@@ -1,9 +1,14 @@
 import { useMemo } from 'react'
 import type { FlowMarketItem } from '../../lib/api/data'
 
+function td(lang: string, zh: string, id: string, en: string) {
+  return lang === 'zh' ? zh : lang === 'id' ? id : en
+}
+
 interface FlowMarketsProps {
   items?: FlowMarketItem[]
   window?: string
+  language?: string
 }
 
 function baseLabel(raw: string): string {
@@ -32,7 +37,7 @@ const GRID = '64px 96px minmax(120px, 1fr) 80px 96px'
  * a market's net inflow over the window, a buy/sell split bar, trade count, and
  * latest price. Sorted by net inflow descending (the upstream ordering).
  */
-export function FlowMarkets({ items, window = '1h' }: FlowMarketsProps) {
+export function FlowMarkets({ items, window = '1h', language = 'en' }: FlowMarketsProps) {
   const win = window.toUpperCase()
   const rows = useMemo(() => {
     if (!items || items.length === 0) return []
@@ -56,7 +61,7 @@ export function FlowMarkets({ items, window = '1h' }: FlowMarketsProps) {
   }, [items])
 
   if (rows.length === 0) {
-    return <div className="tm-sc" style={{ padding: '12px 0' }}>No net-flow data (claw402 payment required).</div>
+    return <div className="tm-sc" style={{ padding: '12px 0' }}>{td(language, '无净流量数据（需要 claw402 付费）。', 'Tidak ada data net-flow (pembayaran claw402 diperlukan).', 'No net-flow data (claw402 payment required).')}</div>
   }
 
   return (
@@ -74,11 +79,11 @@ export function FlowMarkets({ items, window = '1h' }: FlowMarketsProps) {
           fontSize: 9,
         }}
       >
-        <span>SYMBOL</span>
-        <span style={{ textAlign: 'right' }}>{win} NET</span>
-        <span>BUY/SELL</span>
-        <span style={{ textAlign: 'right' }}>TRADES</span>
-        <span style={{ textAlign: 'right' }}>PRICE</span>
+        <span>{td(language, '交易对', 'SIMBOL', 'SYMBOL')}</span>
+        <span style={{ textAlign: 'right' }}>{win} {td(language, '净流量', 'NET', 'NET')}</span>
+        <span>{td(language, '买入/卖出', 'BELI/JUAL', 'BUY/SELL')}</span>
+        <span style={{ textAlign: 'right' }}>{td(language, '成交', 'TRANSAKSI', 'TRADES')}</span>
+        <span style={{ textAlign: 'right' }}>{td(language, '价格', 'HARGA', 'PRICE')}</span>
       </div>
 
       {/* rows */}
@@ -140,8 +145,8 @@ export function FlowMarkets({ items, window = '1h' }: FlowMarketsProps) {
 
       {/* legend — explains every column */}
       <div className="tm-sc" style={{ marginTop: 8, fontSize: 9, lineHeight: 1.6 }}>
-        net inflow = {win} net buying · <span className="tm-up">green</span>/<span className="tm-dn">red</span> = buy/sell split
-        {' · '}trades = count · last price = last traded price
+        {td(language, '净流入', 'arus masuk bersih', 'net inflow')} = {win} {td(language, '净买入', 'net pembelian', 'net buying')} · <span className="tm-up">{td(language, '绿色', 'hijau', 'green')}</span>/<span className="tm-dn">{td(language, '红色', 'merah', 'red')}</span> = {td(language, '买入/卖出比例', 'rasio beli/jual', 'buy/sell split')}
+        {' · '}{td(language, '成交 = 笔数', 'transaksi = jumlah', 'trades = count')} · {td(language, '最新价 = 最后成交价', 'harga terakhir = harga transaksi terakhir', 'last price = last traded price')}
       </div>
     </div>
   )
