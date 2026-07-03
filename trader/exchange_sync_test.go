@@ -2,21 +2,12 @@ package trader
 
 import (
 	"context"
-	"database/sql"
 	"testing"
 	"time"
 
 	"nofx/ent"
 	"nofx/store"
-
-	sqlite3 "modernc.org/sqlite"
 )
-
-func init() {
-	// ent expects the driver to be registered as "sqlite3",
-	// but modernc.org/sqlite registers as "sqlite"
-	sql.Register("sqlite3", &sqlite3.Driver{})
-}
 
 // TestScenario represents a trading scenario to test
 type TestScenario struct {
@@ -27,8 +18,8 @@ type TestScenario struct {
 
 // TestTrade represents a single trade in a test scenario
 type TestTrade struct {
-	Action      string  // open_long, close_short, etc.
-	Side        string  // LONG or SHORT
+	Action      string // open_long, close_short, etc.
+	Side        string // LONG or SHORT
 	Symbol      string
 	Quantity    float64
 	Price       float64

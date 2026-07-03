@@ -3,6 +3,8 @@ package binance
 import (
 	"context"
 	"math"
+	entfill "nofx/ent/traderfill"
+	entposition "nofx/ent/traderposition"
 	"nofx/store"
 	"os"
 	"sort"
@@ -30,7 +32,7 @@ func TestBinanceSyncVerification(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to init test store: %v", err)
 	}
-	db := st.GormDB()
+	ctx := context.Background()
 
 	trader := NewFuturesTrader(apiKey, secretKey, "test-user")
 
@@ -55,12 +57,19 @@ func TestBinanceSyncVerification(t *testing.T) {
 
 	startTime := time.Now().UTC().Add(-7 * 24 * time.Hour)
 
-	// Get symbols from DB
+	// Get fills and symbols from DB
+	dbFills, err := st.EntClient().TraderFill.Query().Where(entfill.ExchangeID(exchangeID)).All(ctx)
+	if err != nil {
+		t.Fatalf("Failed to query fills: %v", err)
+	}
+	symbolSet := make(map[string]bool)
+	for _, f := range dbFills {
+		symbolSet[f.Symbol] = true
+	}
 	var symbols []string
-	db.Model(&store.TraderFill{}).
-		Select("DISTINCT symbol").
-		Where("exchange_id = ?", exchangeID).
-		Pluck("symbol", &symbols)
+	for s := range symbolSet {
+		symbols = append(symbols, s)
+	}
 
 	t.Logf("Symbols to verify: %v", symbols)
 
@@ -104,9 +113,6 @@ func TestBinanceSyncVerification(t *testing.T) {
 	t.Logf("STEP 3: Comparing with local database...")
 	t.Logf("%s", repeatStr("=", 60))
 
-	var dbFills []store.TraderFill
-	db.Where("exchange_id = ?", exchangeID).Find(&dbFills)
-
 	t.Logf("Total fills in DB: %d", len(dbFills))
 
 	// Create maps for comparison
@@ -115,9 +121,27 @@ func TestBinanceSyncVerification(t *testing.T) {
 		exchangeTradeMap[t.TradeID] = t
 	}
 
-	dbFillMap := make(map[string]store.TraderFill)
+	type dbFillInfo struct {
+		ExchangeTradeID string
+		Symbol          string
+		Side            string
+		Price           float64
+		Quantity        float64
+		Commission      float64
+		RealizedPnL     float64
+	}
+
+	dbFillMap := make(map[string]dbFillInfo)
 	for _, f := range dbFills {
-		dbFillMap[f.ExchangeTradeID] = f
+		dbFillMap[f.ExchangeTradeID] = dbFillInfo{
+			ExchangeTradeID: f.ExchangeTradeID,
+			Symbol:          f.Symbol,
+			Side:            f.Side,
+			Price:           f.Price,
+			Quantity:        f.Quantity,
+			Commission:      f.Commission,
+			RealizedPnL:     f.RealizedPnl,
+		}
 	}
 
 	// Step 4: Check for missing trades
@@ -152,7 +176,7 @@ func TestBinanceSyncVerification(t *testing.T) {
 	t.Logf("STEP 5: Checking for EXTRA trades (in DB but not in exchange)...")
 	t.Logf("%s", repeatStr("=", 60))
 
-	var extraTrades []store.TraderFill
+	var extraTrades []dbFillInfo
 	for tradeID, fill := range dbFillMap {
 		if _, exists := exchangeTradeMap[tradeID]; !exists {
 			extraTrades = append(extraTrades, fill)
@@ -180,9 +204,9 @@ func TestBinanceSyncVerification(t *testing.T) {
 	t.Logf("%s", repeatStr("=", 60))
 
 	type DataMismatch struct {
-		TradeID string
-		Field   string
-		DB      float64
+		TradeID  string
+		Field    string
+		DB       float64
 		Exchange float64
 	}
 
@@ -246,12 +270,12 @@ func TestBinanceSyncVerification(t *testing.T) {
 	t.Logf("%s", repeatStr("=", 60))
 
 	type SymbolSummary struct {
-		Symbol          string
-		ExchangeCount   int
-		DBCount         int
-		TotalQty        float64
-		TotalFee        float64
-		TotalPnL        float64
+		Symbol           string
+		ExchangeCount    int
+		DBCount          int
+		TotalQty         float64
+		TotalFee         float64
+		TotalPnL         float64
 		ExchangeTotalQty float64
 		ExchangeTotalFee float64
 		ExchangeTotalPnL float64
@@ -278,7 +302,7 @@ func TestBinanceSyncVerification(t *testing.T) {
 		s.DBCount++
 		s.TotalQty += fill.Quantity
 		s.TotalFee += fill.Commission
-		s.TotalPnL += fill.RealizedPnL
+		s.TotalPnL += fill.RealizedPnl
 	}
 
 	t.Logf("\n%-15s %10s %10s %15s %15s %15s", "Symbol", "Exchange", "DB", "Fee(Exc/DB)", "PnL(Exc/DB)", "Match")
@@ -307,8 +331,10 @@ func TestBinanceSyncVerification(t *testing.T) {
 	t.Logf("%s", repeatStr("=", 60))
 
 	// Get positions from DB
-	var dbPositions []store.TraderPosition
-	db.Where("exchange_id = ? AND status = ?", exchangeID, "closed").Find(&dbPositions)
+	dbPositions, err := st.EntClient().TraderPosition.Query().Where(entposition.ExchangeID(exchangeID), entposition.Status("CLOSED")).All(ctx)
+	if err != nil {
+		t.Fatalf("Failed to query positions: %v", err)
+	}
 
 	t.Logf("Closed positions in DB: %d", len(dbPositions))
 
@@ -329,7 +355,7 @@ func TestBinanceSyncVerification(t *testing.T) {
 	var totalRealizedPnL float64
 	var totalFees float64
 	for _, fill := range dbFills {
-		totalRealizedPnL += fill.RealizedPnL
+		totalRealizedPnL += fill.RealizedPnl
 		totalFees += fill.Commission
 	}
 

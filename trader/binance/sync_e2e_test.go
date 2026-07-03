@@ -1,10 +1,14 @@
 package binance
 
 import (
+	"context"
 	"nofx/store"
 	"os"
 	"testing"
 	"time"
+
+	entfill "nofx/ent/traderfill"
+	entorder "nofx/ent/traderorder"
 )
 
 // TestBinanceSyncE2E tests the complete sync flow end-to-end
@@ -22,7 +26,7 @@ func TestBinanceSyncE2E(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to init test store: %v", err)
 	}
-	db := st.GormDB()
+	ctx := context.Background()
 
 	// Create trader
 	trader := NewFuturesTrader(apiKey, secretKey, "test-user")
@@ -50,22 +54,24 @@ func TestBinanceSyncE2E(t *testing.T) {
 	orderStore := st.Order()
 
 	// Count orders
-	var orderCount int64
-	db.Model(&store.TraderOrder{}).Where("exchange_id = ?", exchangeID).Count(&orderCount)
+	orderCount, _ := st.EntClient().TraderOrder.Query().Where(entorder.ExchangeID(exchangeID)).Count(ctx)
 	t.Logf("\n📊 Results:")
 	t.Logf("   Orders in DB: %d", orderCount)
 
 	// Count fills
-	var fillCount int64
-	db.Model(&store.TraderFill{}).Where("exchange_id = ?", exchangeID).Count(&fillCount)
+	fillCount, _ := st.EntClient().TraderFill.Query().Where(entfill.ExchangeID(exchangeID)).Count(ctx)
 	t.Logf("   Fills in DB: %d", fillCount)
 
 	// Get symbols
-	var symbols []string
-	db.Model(&store.TraderFill{}).
-		Select("DISTINCT symbol").
-		Where("exchange_id = ?", exchangeID).
-		Pluck("symbol", &symbols)
+	fills, _ := st.EntClient().TraderFill.Query().Where(entfill.ExchangeID(exchangeID)).All(ctx)
+	symbolMap := make(map[string]bool)
+	for _, f := range fills {
+		symbolMap[f.Symbol] = true
+	}
+	symbols := make([]string, 0, len(symbolMap))
+	for s := range symbolMap {
+		symbols = append(symbols, s)
+	}
 	t.Logf("   Unique symbols: %d - %v", len(symbols), symbols)
 
 	// Check max trade IDs (test the fix)
@@ -84,11 +90,10 @@ func TestBinanceSyncE2E(t *testing.T) {
 	}
 
 	// Sample some orders
-	var sampleOrders []store.TraderOrder
-	db.Where("exchange_id = ?", exchangeID).Limit(5).Find(&sampleOrders)
-	if len(sampleOrders) > 0 {
+	orders, _ := st.EntClient().TraderOrder.Query().Where(entorder.ExchangeID(exchangeID)).Limit(5).All(ctx)
+	if len(orders) > 0 {
 		t.Logf("\n📝 Sample orders:")
-		for i, order := range sampleOrders {
+		for i, order := range orders {
 			t.Logf("   [%d] %s %s %s qty=%.6f price=%.4f action=%s time=%s",
 				i+1, order.ExchangeOrderID, order.Symbol, order.Side,
 				order.Quantity, order.Price, order.OrderAction,
@@ -107,8 +112,7 @@ func TestBinanceSyncE2E(t *testing.T) {
 	t.Logf("✅ Incremental sync completed in %v", elapsed)
 
 	// Check counts again - should be the same
-	var newOrderCount int64
-	db.Model(&store.TraderOrder{}).Where("exchange_id = ?", exchangeID).Count(&newOrderCount)
+	newOrderCount, _ := st.EntClient().TraderOrder.Query().Where(entorder.ExchangeID(exchangeID)).Count(ctx)
 	t.Logf("   Orders after incremental sync: %d (was %d)", newOrderCount, orderCount)
 
 	if newOrderCount != orderCount {
@@ -153,7 +157,7 @@ func TestBinanceSyncWithExistingData(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to init test store: %v", err)
 	}
-	db := st.GormDB()
+	ctx := context.Background()
 	orderStore := st.Order()
 
 	trader := NewFuturesTrader(apiKey, secretKey, "test-user")
@@ -204,8 +208,7 @@ func TestBinanceSyncWithExistingData(t *testing.T) {
 	t.Logf("✅ Sync completed")
 
 	// Check that trades were actually synced despite the bad data
-	var fillCount int64
-	db.Model(&store.TraderFill{}).Where("exchange_id = ?", exchangeID).Count(&fillCount)
+	fillCount, _ := st.EntClient().TraderFill.Query().Where(entfill.ExchangeID(exchangeID)).Count(ctx)
 	t.Logf("   Total fills in DB: %d (includes 1 fake)", fillCount)
 
 	if fillCount > 1 {
