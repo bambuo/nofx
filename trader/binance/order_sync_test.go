@@ -64,6 +64,34 @@ func TestBinanceGetPositions(t *testing.T) {
 	}
 }
 
+func TestShouldBackfillActivePositionTrades(t *testing.T) {
+	active := map[string]bool{
+		"ZECUSDT": true,
+		"BTCUSDT": true,
+	}
+	maxTradeIDs := map[string]int64{
+		"BTCUSDT": 12345,
+		"ETHUSDT": 67890,
+		"XRPUSDT": 0,
+	}
+
+	tests := []struct {
+		symbol string
+		want   bool
+	}{
+		{symbol: "ZECUSDT", want: true},
+		{symbol: "BTCUSDT", want: false},
+		{symbol: "ETHUSDT", want: false},
+		{symbol: "XRPUSDT", want: false},
+	}
+
+	for _, tt := range tests {
+		if got := shouldBackfillActivePositionTrades(tt.symbol, active, maxTradeIDs); got != tt.want {
+			t.Fatalf("shouldBackfillActivePositionTrades(%s) = %v, want %v", tt.symbol, got, tt.want)
+		}
+	}
+}
+
 // TestBinanceGetCommissionSymbols tests COMMISSION income detection
 func TestBinanceGetCommissionSymbols(t *testing.T) {
 	skipIfNoLiveTest(t)
@@ -233,7 +261,7 @@ func TestBinanceTimestampFormats(t *testing.T) {
 
 	// Test what happens when we parse a time stored in DB
 	// Simulate old DB value stored in local time
-	oldLocalTime := time.Date(2026, 1, 6, 18, 0, 0, 0, time.Local) // 18:00 local
+	oldLocalTime := time.Date(2026, 1, 6, 18, 0, 0, 0, time.Local)    // 18:00 local
 	oldLocalTimeAsUTC := time.Date(2026, 1, 6, 18, 0, 0, 0, time.UTC) // Same numbers but UTC
 
 	t.Logf("\n🔍 Timezone mismatch scenario:")
@@ -386,7 +414,7 @@ func TestBinanceTradeIDRange(t *testing.T) {
 			continue
 		}
 
-		var minID, maxID int64 = 1<<62, 0
+		var minID, maxID int64 = 1 << 62, 0
 		for _, trade := range trades {
 			var id int64
 			fmt.Sscanf(trade.TradeID, "%d", &id)

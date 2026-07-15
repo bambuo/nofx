@@ -37,7 +37,8 @@ var (
 const (
 	decisionRequestTemperature = 0.2
 	decisionRequestTopP        = 0.2
-	decisionRequestMaxTokens   = 1800
+	decisionRequestMaxTokens   = 2400
+	decisionRepairMaxTokens    = 900
 	defaultMinRiskRewardRatio  = 3.0
 	coinProviderNofxOS         = "nofxos"
 	coinProviderBinance        = "binance"
@@ -351,6 +352,30 @@ func GetFullDecisionWithStrategy(ctx *Context, mcpClient mcp.AIClient, engine *S
 		riskConfig.AltcoinMaxPositionValueRatio,
 		riskConfig.MinRiskRewardRatio,
 	)
+	if err == nil && decisionUsesSafeFallback(decision) {
+		logger.Infof("⚠️  AI response used safe fallback, requesting structured decision repair...")
+		repairedResponse, repairErr := requestDecisionRepair(mcpClient, aiResponse, engine.GetLanguage())
+		if repairErr != nil {
+			logger.Infof("⚠️  AI decision repair request failed: %v", repairErr)
+		} else {
+			repairedDecision, parseRepairErr := parseFullDecisionResponse(
+				repairedResponse,
+				ctx.Account.TotalEquity,
+				riskConfig.BTCETHMaxLeverage,
+				riskConfig.AltcoinMaxLeverage,
+				riskConfig.BTCETHMaxPositionValueRatio,
+				riskConfig.AltcoinMaxPositionValueRatio,
+				riskConfig.MinRiskRewardRatio,
+			)
+			if parseRepairErr != nil {
+				logger.Infof("⚠️  AI decision repair parse failed: %v", parseRepairErr)
+			} else if !decisionUsesSafeFallback(repairedDecision) {
+				logger.Infof("✅ AI decision repair produced structured decision")
+				decision = repairedDecision
+				aiResponse = aiResponse + "\n\n--- FORMAT_REPAIR_RESPONSE ---\n" + repairedResponse
+			}
+		}
+	}
 
 	if decision != nil {
 		decision.Timestamp = time.Now()
@@ -367,6 +392,16 @@ func GetFullDecisionWithStrategy(ctx *Context, mcpClient mcp.AIClient, engine *S
 	return decision, nil
 }
 
+func decisionUsesSafeFallback(decision *FullDecision) bool {
+	if decision == nil || len(decision.Decisions) != 1 {
+		return false
+	}
+	d := decision.Decisions[0]
+	return d.Symbol == "ALL" &&
+		strings.EqualFold(d.Action, "wait") &&
+		strings.Contains(d.Reasoning, "Model didn't output structured JSON decision")
+}
+
 func buildDecisionRequest(systemPrompt, userPrompt string) (*mcp.Request, error) {
 	return mcp.NewRequestBuilder().
 		WithSystemPrompt(systemPrompt).
@@ -375,6 +410,46 @@ func buildDecisionRequest(systemPrompt, userPrompt string) (*mcp.Request, error)
 		WithTopP(decisionRequestTopP).
 		WithMaxTokens(decisionRequestMaxTokens).
 		Build()
+}
+
+func requestDecisionRepair(mcpClient mcp.AIClient, rawResponse string, lang Language) (string, error) {
+	systemPrompt := "You repair malformed trading AI output. Return ONLY <reasoning> and <decision> XML tags. The <decision> tag must contain a JSON array. Do not add markdown outside the tags."
+	userPrompt := `The previous model response did not contain a machine-readable decision.
+
+Convert it into this exact format:
+<reasoning>
+- one short auditable reason
+</reasoning>
+<decision>
+[
+  {"symbol":"ALL","action":"wait","confidence":0,"reasoning":"No structured actionable decision was present in the original response."}
+]
+</decision>
+
+Rules:
+- If the original response clearly contains valid trade actions, convert them to JSON.
+- If it does not clearly contain valid trade actions, return the ALL/wait decision above.
+- Valid actions: open_long, open_short, close_long, close_short, hold, wait.
+- For open_long/open_short, include leverage, position_size_usd, stop_loss, take_profit, confidence, and reasoning.
+
+Original response:
+` + rawResponse
+
+	if lang == LangChinese {
+		systemPrompt = "你是交易决策格式修复器。只返回 <reasoning> 与 <decision> XML 标签。<decision> 内必须是 JSON 数组。不要在标签外输出任何内容。"
+	}
+
+	req, err := mcp.NewRequestBuilder().
+		WithSystemPrompt(systemPrompt).
+		WithUserPrompt(userPrompt).
+		WithTemperature(0).
+		WithTopP(0.1).
+		WithMaxTokens(decisionRepairMaxTokens).
+		Build()
+	if err != nil {
+		return "", err
+	}
+	return mcpClient.CallWithRequest(req)
 }
 
 // ============================================================================
@@ -1379,24 +1454,24 @@ func (e *StrategyEngine) BuildSystemPrompt(accountEquity float64, variant string
 	// 8. Output format
 	if lang == LangChinese {
 		sb.WriteString("# 输出格式（严格遵循）\n\n")
-		sb.WriteString("**必须使用 XML 标签 <reasoning> 和 <decision> 分隔理由摘要和决策 JSON，避免解析错误**\n\n")
+		sb.WriteString("**最终回复只能包含 <reasoning> 和 <decision> 两个 XML 标签，标签外不要输出任何文字。**\n")
+		sb.WriteString("**必须使用 <decision> 包裹 JSON 决策数组；如果没有交易机会，也必须输出 `ALL/wait` JSON。**\n\n")
 		sb.WriteString("## 格式要求\n\n")
 		sb.WriteString("<reasoning>\n")
-		sb.WriteString("- 用 3-6 条短句概括关键证据、风险点和无效条件\n")
+		sb.WriteString("- 用 1-3 条短句概括关键证据、风险点和无效条件\n")
 		sb.WriteString("- 不要输出完整隐藏推理链，不要在此处放 JSON\n")
 		sb.WriteString("</reasoning>\n\n")
 		sb.WriteString("<decision>\n")
-		sb.WriteString("第二步：JSON 决策数组\n\n")
 	} else {
 		sb.WriteString("# Output Format (Strictly Follow)\n\n")
-		sb.WriteString("**Must use XML tags <reasoning> and <decision> to separate the rationale summary and decision JSON, avoiding parsing errors**\n\n")
+		sb.WriteString("**The final response must contain only the <reasoning> and <decision> XML tags, with no text outside the tags.**\n")
+		sb.WriteString("**The <decision> tag must wrap a JSON decision array; if there is no trade opportunity, still output an `ALL/wait` JSON decision.**\n\n")
 		sb.WriteString("## Format Requirements\n\n")
 		sb.WriteString("<reasoning>\n")
-		sb.WriteString("- Summarize key evidence, risks, and invalidation conditions in 3-6 short bullets\n")
+		sb.WriteString("- Summarize key evidence, risks, and invalidation conditions in 1-3 short bullets\n")
 		sb.WriteString("- Do not output hidden chain-of-thought and do not place JSON here\n")
 		sb.WriteString("</reasoning>\n\n")
 		sb.WriteString("<decision>\n")
-		sb.WriteString("Step 2: JSON decision array\n\n")
 	}
 	sb.WriteString("```json\n[\n")
 	// Use the actual configured position value ratio for BTC/ETH in the example

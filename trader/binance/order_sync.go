@@ -18,6 +18,8 @@ var (
 	binanceSyncStateMutex sync.RWMutex
 )
 
+const activePositionTradeRecoveryLookback = 7 * 24 * time.Hour
+
 // SyncOrdersFromBinance syncs Binance Futures trade history to local database
 // Uses COMMISSION detection + fromId for efficient incremental sync
 // Also creates/updates position records to ensure orders/fills/positions data consistency
@@ -85,8 +87,10 @@ func (t *FuturesTrader) SyncOrdersFromBinance(traderID string, exchangeID string
 
 	// Method 2: Always include active positions (catches trades that COMMISSION missed)
 	positionSymbols := t.getPositionSymbols()
+	positionSymbolSet := make(map[string]bool, len(positionSymbols))
 	logger.Infof("  📋 Position symbols found: %d - %v", len(positionSymbols), positionSymbols)
 	for _, s := range positionSymbols {
+		positionSymbolSet[s] = true
 		symbolMap[s] = true
 	}
 
@@ -148,6 +152,21 @@ func (t *FuturesTrader) SyncOrdersFromBinance(traderID string, exchangeID string
 			failedSymbols = append(failedSymbols, symbol)
 			continue
 		}
+
+		if len(trades) == 0 && shouldBackfillActivePositionTrades(symbol, positionSymbolSet, maxTradeIDs) {
+			recoveryStart := time.Now().UTC().Add(-activePositionTradeRecoveryLookback)
+			logger.Infof("  🔎 %s has active position but no local trade history; backfilling from %s (UTC)",
+				symbol, recoveryStart.Format("2006-01-02 15:04:05"))
+			trades, queryErr = t.GetTradesForSymbol(symbol, recoveryStart, 1000)
+			apiCalls++
+			if queryErr != nil {
+				logger.Infof("  ⚠️ Failed to backfill active position trades for %s: %v", symbol, queryErr)
+				failedSymbols = append(failedSymbols, symbol)
+				continue
+			}
+			logger.Infof("  📥 Backfill returned %d trades for active position %s", len(trades), symbol)
+		}
+
 		allTrades = append(allTrades, trades...)
 	}
 
@@ -288,6 +307,14 @@ func (t *FuturesTrader) SyncOrdersFromBinance(traderID string, exchangeID string
 
 	logger.Infof("✅ Binance order sync completed: %d new trades synced, %d skipped (already exist)", syncedCount, skippedCount)
 	return nil
+}
+
+func shouldBackfillActivePositionTrades(symbol string, activePositionSymbols map[string]bool, maxTradeIDs map[string]int64) bool {
+	if !activePositionSymbols[symbol] {
+		return false
+	}
+	lastID, hasLocalTrades := maxTradeIDs[symbol]
+	return !hasLocalTrades || lastID <= 0
 }
 
 // getPositionSymbols returns list of symbols that have active positions
