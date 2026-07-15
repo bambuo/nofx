@@ -45,13 +45,13 @@ type AutoTraderConfig struct {
 	BybitSecretKey string
 
 	// OKX API configuration
-	OKXAPIKey    string
-	OKXSecretKey string
+	OKXAPIKey     string
+	OKXSecretKey  string
 	OKXPassphrase string
 
 	// Bitget API configuration
-	BitgetAPIKey    string
-	BitgetSecretKey string
+	BitgetAPIKey     string
+	BitgetSecretKey  string
 	BitgetPassphrase string
 
 	// Gate API configuration
@@ -59,8 +59,8 @@ type AutoTraderConfig struct {
 	GateSecretKey string
 
 	// KuCoin API configuration
-	KuCoinAPIKey    string
-	KuCoinSecretKey string
+	KuCoinAPIKey     string
+	KuCoinSecretKey  string
 	KuCoinPassphrase string
 
 	// Hyperliquid configuration
@@ -122,9 +122,9 @@ type AutoTrader struct {
 	config                AutoTraderConfig
 	trader                Trader // Use Trader interface (supports multiple platforms)
 	mcpClient             mcp.AIClient
-	store                 *store.Store             // Data storage (decision records, etc.)
+	store                 *store.Store           // Data storage (decision records, etc.)
 	strategyEngine        *kernel.StrategyEngine // Strategy engine (uses strategy configuration)
-	cycleNumber           int                      // Current cycle number
+	cycleNumber           int                    // Current cycle number
 	initialBalance        float64
 	dailyPnL              float64
 	customPrompt          string // Custom trading strategy prompt
@@ -1163,6 +1163,7 @@ func (at *AutoTrader) executeOpenLongWithRecord(decision *kernel.Decision, actio
 	quantity := actualPositionSize / marketData.CurrentPrice
 	actionRecord.Quantity = quantity
 	actionRecord.Price = marketData.CurrentPrice
+	at.logOpenOrderPreflight("LONG", decision, positions, balance, marketData.CurrentPrice, actualPositionSize, quantity)
 
 	// Set margin mode
 	if err := at.trader.SetMarginMode(decision.Symbol, at.config.IsCrossMargin); err != nil {
@@ -1280,6 +1281,7 @@ func (at *AutoTrader) executeOpenShortWithRecord(decision *kernel.Decision, acti
 	quantity := actualPositionSize / marketData.CurrentPrice
 	actionRecord.Quantity = quantity
 	actionRecord.Price = marketData.CurrentPrice
+	at.logOpenOrderPreflight("SHORT", decision, positions, balance, marketData.CurrentPrice, actualPositionSize, quantity)
 
 	// Set margin mode
 	if err := at.trader.SetMarginMode(decision.Symbol, at.config.IsCrossMargin); err != nil {
@@ -2181,22 +2183,22 @@ func (at *AutoTrader) recordOrderFill(orderRecordID int64, exchangeOrderID, symb
 	normalizedSymbol := market.Normalize(symbol)
 
 	fill := &store.TraderFill{
-		TraderID:         at.id,
-		ExchangeID:       at.exchangeID,
-		ExchangeType:     at.exchange,
-		OrderID:          orderRecordID,
-		ExchangeOrderID:  exchangeOrderID,
-		ExchangeTradeID:  tradeID,
-		Symbol:           normalizedSymbol,
-		Side:             side,
-		Price:            price,
-		Quantity:         quantity,
-		QuoteQuantity:    price * quantity,
-		Commission:       fee,
-		CommissionAsset:  "USDT",
-		RealizedPnL:      0, // Will be calculated for close orders
-		IsMaker:          false, // Market orders are usually taker
-		CreatedAt:        time.Now().UTC().UnixMilli(),
+		TraderID:        at.id,
+		ExchangeID:      at.exchangeID,
+		ExchangeType:    at.exchange,
+		OrderID:         orderRecordID,
+		ExchangeOrderID: exchangeOrderID,
+		ExchangeTradeID: tradeID,
+		Symbol:          normalizedSymbol,
+		Side:            side,
+		Price:           price,
+		Quantity:        quantity,
+		QuoteQuantity:   price * quantity,
+		Commission:      fee,
+		CommissionAsset: "USDT",
+		RealizedPnL:     0,     // Will be calculated for close orders
+		IsMaker:         false, // Market orders are usually taker
+		CreatedAt:       time.Now().UTC().UnixMilli(),
 	}
 
 	// Calculate realized PnL for close orders
@@ -2229,10 +2231,195 @@ func (at *AutoTrader) recordOrderFill(orderRecordID int64, exchangeOrderID, symb
 // Risk Control Helpers
 // ============================================================================
 
+type openOrderPreflight struct {
+	Symbol                string
+	Side                  string
+	Price                 float64
+	Quantity              float64
+	Leverage              int
+	Confidence            int
+	PositionSizeUSD       float64
+	InitialMargin         float64
+	AvailableBalance      float64
+	Equity                float64
+	CurrentMarginUsed     float64
+	CurrentMarginUsagePct float64
+	ProjectedMarginUsed   float64
+	ProjectedMarginPct    float64
+	MaxMarginPct          float64
+	CurrentPositions      int
+	MaxPositions          int
+	MinPositionSize       float64
+	MaxPositionValue      float64
+	StopLoss              float64
+	TakeProfit            float64
+	RiskPct               float64
+	RewardPct             float64
+	RiskRewardRatio       float64
+	MinRiskRewardRatio    float64
+}
+
 // isBTCETH checks if a symbol is BTC or ETH
 func isBTCETH(symbol string) bool {
 	symbol = strings.ToUpper(symbol)
 	return strings.HasPrefix(symbol, "BTC") || strings.HasPrefix(symbol, "ETH")
+}
+
+func (at *AutoTrader) logOpenOrderPreflight(side string, decision *kernel.Decision, positions []map[string]interface{}, balance map[string]interface{}, price, positionSizeUSD, quantity float64) {
+	check := at.buildOpenOrderPreflight(side, decision, positions, balance, price, positionSizeUSD, quantity)
+	logger.Infof("  🧾 [PREFLIGHT] %s %s | price=%.6f qty=%.8f leverage=%dx confidence=%d",
+		check.Side, check.Symbol, check.Price, check.Quantity, check.Leverage, check.Confidence)
+	logger.Infof("  🧾 [PREFLIGHT] position=%.2f USDT initial_margin=%.2f available=%.2f equity=%.2f",
+		check.PositionSizeUSD, check.InitialMargin, check.AvailableBalance, check.Equity)
+	logger.Infof("  🧾 [PREFLIGHT] positions=%d/%d min_position=%.2f max_position_value=%.2f",
+		check.CurrentPositions, check.MaxPositions, check.MinPositionSize, check.MaxPositionValue)
+	logger.Infof("  🧾 [PREFLIGHT] margin_usage %.2f%% -> %.2f%% (max %.2f%%)",
+		check.CurrentMarginUsagePct, check.ProjectedMarginPct, check.MaxMarginPct)
+	logger.Infof("  🧾 [PREFLIGHT] SL=%.6f TP=%.6f risk=%.2f%% reward=%.2f%% RR=%.2f:1 (min %.2f:1)",
+		check.StopLoss, check.TakeProfit, check.RiskPct, check.RewardPct, check.RiskRewardRatio, check.MinRiskRewardRatio)
+}
+
+func (at *AutoTrader) buildOpenOrderPreflight(side string, decision *kernel.Decision, positions []map[string]interface{}, balance map[string]interface{}, price, positionSizeUSD, quantity float64) openOrderPreflight {
+	risk := at.riskControlConfig()
+	equity := balanceEquity(balance)
+	availableBalance := floatFromMap(balance, "availableBalance")
+	currentMarginUsed := totalMarginUsedFromPositions(positions)
+	currentMarginPct := percentOf(currentMarginUsed, equity)
+	initialMargin := 0.0
+	if decision.Leverage > 0 {
+		initialMargin = positionSizeUSD / float64(decision.Leverage)
+	}
+	projectedMarginUsed := currentMarginUsed + initialMargin
+	maxMarginPct := risk.MaxMarginUsage * 100
+	if maxMarginPct <= 0 {
+		maxMarginPct = 90
+	}
+	maxPositions := risk.MaxPositions
+	if maxPositions <= 0 {
+		maxPositions = 3
+	}
+	minPositionSize := risk.MinPositionSize
+	if minPositionSize <= 0 {
+		minPositionSize = 12
+	}
+	minRiskRewardRatio := risk.MinRiskRewardRatio
+	if minRiskRewardRatio <= 0 {
+		minRiskRewardRatio = 3
+	}
+	maxPositionRatio := risk.AltcoinMaxPositionValueRatio
+	if isBTCETH(decision.Symbol) {
+		maxPositionRatio = risk.BTCETHMaxPositionValueRatio
+	}
+	if maxPositionRatio <= 0 {
+		maxPositionRatio = 1
+	}
+
+	riskPct, rewardPct, rr := calculateRiskReward(side, price, decision.StopLoss, decision.TakeProfit)
+	return openOrderPreflight{
+		Symbol:                decision.Symbol,
+		Side:                  side,
+		Price:                 price,
+		Quantity:              quantity,
+		Leverage:              decision.Leverage,
+		Confidence:            decision.Confidence,
+		PositionSizeUSD:       positionSizeUSD,
+		InitialMargin:         initialMargin,
+		AvailableBalance:      availableBalance,
+		Equity:                equity,
+		CurrentMarginUsed:     currentMarginUsed,
+		CurrentMarginUsagePct: currentMarginPct,
+		ProjectedMarginUsed:   projectedMarginUsed,
+		ProjectedMarginPct:    percentOf(projectedMarginUsed, equity),
+		MaxMarginPct:          maxMarginPct,
+		CurrentPositions:      len(positions),
+		MaxPositions:          maxPositions,
+		MinPositionSize:       minPositionSize,
+		MaxPositionValue:      equity * maxPositionRatio,
+		StopLoss:              decision.StopLoss,
+		TakeProfit:            decision.TakeProfit,
+		RiskPct:               riskPct,
+		RewardPct:             rewardPct,
+		RiskRewardRatio:       rr,
+		MinRiskRewardRatio:    minRiskRewardRatio,
+	}
+}
+
+func (at *AutoTrader) riskControlConfig() store.RiskControlConfig {
+	if at.config.StrategyConfig == nil {
+		return store.RiskControlConfig{}
+	}
+	return at.config.StrategyConfig.RiskControl
+}
+
+func calculateRiskReward(side string, entryPrice, stopLoss, takeProfit float64) (riskPct, rewardPct, riskRewardRatio float64) {
+	if entryPrice <= 0 || stopLoss <= 0 || takeProfit <= 0 {
+		return 0, 0, 0
+	}
+	switch strings.ToUpper(side) {
+	case "SHORT":
+		riskPct = (stopLoss - entryPrice) / entryPrice * 100
+		rewardPct = (entryPrice - takeProfit) / entryPrice * 100
+	default:
+		riskPct = (entryPrice - stopLoss) / entryPrice * 100
+		rewardPct = (takeProfit - entryPrice) / entryPrice * 100
+	}
+	if riskPct <= 0 || rewardPct <= 0 {
+		return riskPct, rewardPct, 0
+	}
+	return riskPct, rewardPct, rewardPct / riskPct
+}
+
+func balanceEquity(balance map[string]interface{}) float64 {
+	if equity := floatFromMap(balance, "totalEquity"); equity > 0 {
+		return equity
+	}
+	if wallet := floatFromMap(balance, "totalWalletBalance"); wallet > 0 {
+		return wallet
+	}
+	return floatFromMap(balance, "availableBalance")
+}
+
+func totalMarginUsedFromPositions(positions []map[string]interface{}) float64 {
+	total := 0.0
+	for _, pos := range positions {
+		markPrice := floatFromMap(pos, "markPrice")
+		quantity := math.Abs(floatFromMap(pos, "positionAmt"))
+		leverage := floatFromMap(pos, "leverage")
+		if leverage <= 0 {
+			leverage = 10
+		}
+		total += quantity * markPrice / leverage
+	}
+	return total
+}
+
+func floatFromMap(values map[string]interface{}, key string) float64 {
+	value, ok := values[key]
+	if !ok {
+		return 0
+	}
+	switch typed := value.(type) {
+	case float64:
+		return typed
+	case float32:
+		return float64(typed)
+	case int:
+		return float64(typed)
+	case int64:
+		return float64(typed)
+	case json.Number:
+		parsed, _ := typed.Float64()
+		return parsed
+	default:
+		return 0
+	}
+}
+
+func percentOf(value, total float64) float64 {
+	if total <= 0 {
+		return 0
+	}
+	return value / total * 100
 }
 
 // enforcePositionValueRatio checks and enforces position value ratio limits (CODE ENFORCED)
@@ -2324,4 +2511,3 @@ func getSideFromAction(action string) string {
 func (at *AutoTrader) GetOpenOrders(symbol string) ([]OpenOrder, error) {
 	return at.trader.GetOpenOrders(symbol)
 }
-
