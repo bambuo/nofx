@@ -514,6 +514,7 @@ export interface GridStrategyConfig {
 
 export interface CoinSourceConfig {
   source_type: 'static' | 'ai500' | 'oi_top' | 'oi_low' | 'mixed';
+  providers?: Array<'nofxos' | 'binance'>;
   static_coins?: string[];
   excluded_coins?: string[];   // 排除的币种列表
   use_ai500: boolean;
@@ -522,7 +523,6 @@ export interface CoinSourceConfig {
   oi_top_limit?: number;
   use_oi_low: boolean;
   oi_low_limit?: number;
-  // Note: API URLs are now built automatically using nofxos_api_key from IndicatorConfig
 }
 
 export interface IndicatorConfig {

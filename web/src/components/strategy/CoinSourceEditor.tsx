@@ -22,29 +22,29 @@ export function CoinSourceEditor({
     const translations: Record<string, Record<string, string>> = {
       sourceType: { zh: '数据来源类型', en: 'Source Type' },
       static: { zh: '静态列表', en: 'Static List' },
-      ai500: { zh: 'AI500 数据源', en: 'AI500 Data Provider' },
+      ai500: { zh: '综合评分榜', en: 'Score Top' },
       oi_top: { zh: 'OI 持仓增加', en: 'OI Increase' },
       oi_low: { zh: 'OI 持仓减少', en: 'OI Decrease' },
       mixed: { zh: '混合模式', en: 'Mixed Mode' },
       staticCoins: { zh: '自定义币种', en: 'Custom Coins' },
       addCoin: { zh: '添加币种', en: 'Add Coin' },
-      useAI500: { zh: '启用 AI500 数据源', en: 'Enable AI500 Data Provider' },
+      useAI500: { zh: '启用综合评分榜', en: 'Enable Score Top' },
       ai500Limit: { zh: '数量上限', en: 'Limit' },
-      useOITop: { zh: '启用 OI 持仓增加榜', en: 'Enable OI Increase' },
+      useOITop: { zh: '启用 OI 持仓增加', en: 'Enable OI Increase' },
       oiTopLimit: { zh: '数量上限', en: 'Limit' },
-      useOILow: { zh: '启用 OI 持仓减少榜', en: 'Enable OI Decrease' },
+      useOILow: { zh: '启用 OI 持仓减少', en: 'Enable OI Decrease' },
       oiLowLimit: { zh: '数量上限', en: 'Limit' },
       staticDesc: { zh: '手动指定交易币种列表', en: 'Manually specify trading coins' },
       ai500Desc: {
-        zh: '使用 AI500 智能筛选的热门币种',
-        en: 'Use AI500 smart-filtered popular coins',
+        zh: '按综合评分筛选高流动性候选币种',
+        en: 'Use score-ranked, high-liquidity candidate coins',
       },
       oiTopDesc: {
-        zh: '持仓增加榜，适合做多',
+        zh: '持仓增加，适合做多',
         en: 'OI increase ranking, for long',
       },
       oi_lowDesc: {
-        zh: '持仓减少榜，适合做空',
+        zh: '持仓减少，适合做空',
         en: 'OI decrease ranking, for short',
       },
       mixedDesc: {
@@ -56,10 +56,16 @@ export function CoinSourceEditor({
       maxCoins: { zh: '最多', en: 'Up to' },
       coins: { zh: '个币种', en: 'coins' },
       dataSourceConfig: { zh: '数据源配置', en: 'Data Source Configuration' },
+      providerTitle: { zh: '数据提供方', en: 'Data Providers' },
+      providerDesc: { zh: '按顺序尝试，未返回数据时自动使用下一个', en: 'Tried in order; falls back when a provider returns no data' },
+      nofxosProvider: { zh: 'NofxOS', en: 'NofxOS' },
+      nofxosProviderDesc: { zh: '需配置自有 NofxOS Key', en: 'Requires your own NofxOS key' },
+      binanceProvider: { zh: 'Binance', en: 'Binance' },
+      binanceProviderDesc: { zh: '公开合约行情与 OI 历史', en: 'Public futures tickers and OI history' },
       excludedCoins: { zh: '排除币种', en: 'Excluded Coins' },
       excludedCoinsDesc: { zh: '这些币种将从所有数据源中排除，不会被交易', en: 'These coins will be excluded from all sources and will not be traded' },
       addExcludedCoin: { zh: '添加排除', en: 'Add Excluded' },
-      nofxosNote: { zh: '使用 NofxOS API Key（在指标配置中设置）', en: 'Uses NofxOS API Key (set in Indicators config)' },
+      providerNote: { zh: '按上方数据提供方顺序获取候选币种', en: 'Candidate coins are fetched using the provider order above' },
     }
     return translations[key]?.[language] || key
   }
@@ -72,13 +78,29 @@ export function CoinSourceEditor({
     { value: 'mixed', icon: Shuffle, color: '#60a5fa' },
   ] as const
 
+  const providerOptions = [
+    { value: 'nofxos', label: 'nofxosProvider', desc: 'nofxosProviderDesc', color: '#a855f7' },
+    { value: 'binance', label: 'binanceProvider', desc: 'binanceProviderDesc', color: '#F0B90B' },
+  ] as const
+
+  const selectedProviders = (config.providers?.length ? config.providers : ['binance']) as Array<'nofxos' | 'binance'>
+
+  const toggleProvider = (provider: 'nofxos' | 'binance') => {
+    if (disabled) return
+    const next = selectedProviders.includes(provider)
+      ? selectedProviders.filter((item) => item !== provider)
+      : [...selectedProviders, provider]
+    if (next.length === 0) return
+    onChange({ ...config, providers: providerOptions.map((option) => option.value).filter((value) => next.includes(value)) })
+  }
+
   // Calculate mixed mode summary
   const getMixedSummary = () => {
     const sources: string[] = []
     let totalLimit = 0
 
     if (config.use_ai500) {
-      sources.push(`AI500(${config.ai500_limit || 10})`)
+      sources.push(`${language === 'zh' ? '评分榜' : 'Score'}(${config.ai500_limit || 10})`)
       totalLimit += config.ai500_limit || 10
     }
     if (config.use_oi_top) {
@@ -192,13 +214,21 @@ export function CoinSourceEditor({
     })
   }
 
-  // NofxOS badge component
-  const NofxOSBadge = () => (
-    <span
-      className="text-[9px] px-1.5 py-0.5 rounded font-medium bg-purple-500/20 text-purple-400 border border-purple-500/30"
-    >
-      NofxOS
-    </span>
+  const ProviderBadges = () => (
+    <div className="flex items-center gap-1">
+      {selectedProviders.map((provider) => (
+        <span
+          key={provider}
+          className={`text-[9px] px-1.5 py-0.5 rounded font-medium border ${
+            provider === 'nofxos'
+              ? 'bg-purple-500/20 text-purple-400 border-purple-500/30'
+              : 'bg-yellow-500/20 text-nofx-gold border-yellow-500/30'
+          }`}
+        >
+          {provider === 'nofxos' ? 'NofxOS' : 'Binance'}
+        </span>
+      ))}
+    </div>
   )
 
   return (
@@ -233,6 +263,56 @@ export function CoinSourceEditor({
           ))}
         </div>
       </div>
+
+      {config.source_type !== 'static' && (
+        <div className="p-4 rounded-lg bg-nofx-bg border border-nofx-gold/20">
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <label className="block text-sm font-medium text-nofx-text">
+                {t('providerTitle')}
+              </label>
+              <p className="text-xs mt-1 text-nofx-text-muted">
+                {t('providerDesc')}
+              </p>
+            </div>
+            <ProviderBadges />
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            {providerOptions.map((provider) => {
+              const checked = selectedProviders.includes(provider.value)
+              return (
+                <button
+                  key={provider.value}
+                  type="button"
+                  onClick={() => toggleProvider(provider.value)}
+                  disabled={disabled}
+                  className={`p-3 rounded-lg border text-left transition-all ${
+                    checked ? 'bg-white/5' : 'opacity-60 hover:opacity-90'
+                  }`}
+                  style={{ borderColor: checked ? `${provider.color}66` : 'rgba(240,185,11,0.2)' }}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full" style={{ background: provider.color }} />
+                      <span className="text-sm font-medium text-nofx-text">{t(provider.label)}</span>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onClick={(e) => e.stopPropagation()}
+                      onChange={() => toggleProvider(provider.value)}
+                      disabled={disabled}
+                      className="w-4 h-4 rounded accent-nofx-gold"
+                    />
+                  </div>
+                  <p className="text-xs mt-1 text-nofx-text-muted">{t(provider.desc)}</p>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Static Coins - only for static mode */}
       {config.source_type === 'static' && (
@@ -335,7 +415,7 @@ export function CoinSourceEditor({
         )}
       </div>
 
-      {/* AI500 Options - only for ai500 mode */}
+      {/* Score Top Options - only for ai500 mode */}
       {config.source_type === 'ai500' && (
         <div
           className="p-4 rounded-lg bg-nofx-gold/5 border border-nofx-gold/20"
@@ -344,9 +424,9 @@ export function CoinSourceEditor({
             <div className="flex items-center gap-2">
               <Zap className="w-4 h-4 text-nofx-gold" />
               <span className="text-sm font-medium text-nofx-text">
-                AI500 {t('dataSourceConfig')}
+                {t('ai500')} {t('dataSourceConfig')}
               </span>
-              <NofxOSBadge />
+              <ProviderBadges />
             </div>
           </div>
 
@@ -386,13 +466,13 @@ export function CoinSourceEditor({
             )}
 
             <p className="text-xs pl-8 text-nofx-text-muted">
-              {t('nofxosNote')}
+              {t('providerNote')}
             </p>
           </div>
         </div>
       )}
 
-      {/* OI Top Options - only for oi_top mode */}
+      {/* OI Increase Options - only for oi_top mode */}
       {config.source_type === 'oi_top' && (
         <div
           className="p-4 rounded-lg bg-nofx-success/5 border border-nofx-success/20"
@@ -401,9 +481,9 @@ export function CoinSourceEditor({
             <div className="flex items-center gap-2">
               <TrendingUp className="w-4 h-4 text-nofx-success" />
               <span className="text-sm font-medium text-nofx-text">
-                OI {language === 'zh' ? '持仓增加榜' : 'Increase'} {t('dataSourceConfig')}
+                OI {language === 'zh' ? '持仓增加' : 'Increase'} {t('dataSourceConfig')}
               </span>
-              <NofxOSBadge />
+              <ProviderBadges />
             </div>
           </div>
 
@@ -443,13 +523,13 @@ export function CoinSourceEditor({
             )}
 
             <p className="text-xs pl-8 text-nofx-text-muted">
-              {t('nofxosNote')}
+              {t('providerNote')}
             </p>
           </div>
         </div>
       )}
 
-      {/* OI Low Options - only for oi_low mode */}
+      {/* OI Decrease Options - only for oi_low mode */}
       {config.source_type === 'oi_low' && (
         <div
           className="p-4 rounded-lg bg-nofx-danger/5 border border-nofx-danger/20"
@@ -458,9 +538,9 @@ export function CoinSourceEditor({
             <div className="flex items-center gap-2">
               <TrendingDown className="w-4 h-4 text-nofx-danger" />
               <span className="text-sm font-medium text-nofx-text">
-                OI {language === 'zh' ? '持仓减少榜' : 'Decrease'} {t('dataSourceConfig')}
+                OI {language === 'zh' ? '持仓减少' : 'Decrease'} {t('dataSourceConfig')}
               </span>
-              <NofxOSBadge />
+              <ProviderBadges />
             </div>
           </div>
 
@@ -500,7 +580,7 @@ export function CoinSourceEditor({
             )}
 
             <p className="text-xs pl-8 text-nofx-text-muted">
-              {t('nofxosNote')}
+              {t('providerNote')}
             </p>
           </div>
         </div>
@@ -518,7 +598,7 @@ export function CoinSourceEditor({
 
           {/* 4 Source Cards in 2x2 Grid */}
           <div className="grid grid-cols-2 gap-3 mb-4">
-            {/* AI500 Card */}
+            {/* Score Top Card */}
             <div
               className={`p-3 rounded-lg border transition-all cursor-pointer ${
                 config.use_ai500
@@ -537,8 +617,8 @@ export function CoinSourceEditor({
                   onClick={(e) => e.stopPropagation()}
                 />
                 <Database className="w-4 h-4 text-nofx-gold" />
-                <span className="text-sm font-medium text-nofx-text">AI500</span>
-                <NofxOSBadge />
+                <span className="text-sm font-medium text-nofx-text">{t('ai500')}</span>
+                <ProviderBadges />
               </div>
               {config.use_ai500 && (
                 <div className="flex items-center gap-2 mt-2 pl-6">
@@ -561,7 +641,7 @@ export function CoinSourceEditor({
               )}
             </div>
 
-            {/* OI Top Card */}
+            {/* OI Increase Card */}
             <div
               className={`p-3 rounded-lg border transition-all cursor-pointer ${
                 config.use_oi_top
@@ -608,7 +688,7 @@ export function CoinSourceEditor({
               )}
             </div>
 
-            {/* OI Low Card */}
+            {/* OI Decrease Card */}
             <div
               className={`p-3 rounded-lg border transition-all cursor-pointer ${
                 config.use_oi_low

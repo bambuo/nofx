@@ -342,6 +342,41 @@ func TestClient_CallWithRequest_Success(t *testing.T) {
 	}
 }
 
+func TestClaudeClient_CallWithRequestBody_UsesMessagesAPIShape(t *testing.T) {
+	client := NewClaudeClientWithOptions(WithAPIKey("sk-test-key")).(*ClaudeClient)
+
+	request := NewRequestBuilder().
+		WithSystemPrompt("system rules").
+		WithUserPrompt("market data").
+		WithTemperature(0.2).
+		WithTopP(0.2).
+		WithMaxTokens(1800).
+		MustBuild()
+
+	body := client.buildRequestBodyFromRequest(request)
+
+	if body["system"] != "system rules" {
+		t.Fatalf("expected top-level Claude system prompt, got %v", body["system"])
+	}
+	if body["temperature"] != 0.2 {
+		t.Fatalf("expected temperature 0.2, got %v", body["temperature"])
+	}
+	if body["top_p"] != 0.2 {
+		t.Fatalf("expected top_p 0.2, got %v", body["top_p"])
+	}
+	if body["max_tokens"] != 1800 {
+		t.Fatalf("expected max_tokens 1800, got %v", body["max_tokens"])
+	}
+
+	messages, ok := body["messages"].([]map[string]string)
+	if !ok {
+		t.Fatalf("expected Claude messages as []map[string]string, got %T", body["messages"])
+	}
+	if len(messages) != 1 || messages[0]["role"] != "user" || messages[0]["content"] != "market data" {
+		t.Fatalf("unexpected Claude messages: %#v", messages)
+	}
+}
+
 func TestClient_CallWithRequest_MultiRound(t *testing.T) {
 	mockHTTP := NewMockHTTPClient()
 	mockHTTP.SetSuccessResponse("Multi-round response")

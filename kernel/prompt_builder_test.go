@@ -1,6 +1,7 @@
 package kernel
 
 import (
+	"nofx/market"
 	"strings"
 	"testing"
 	"time"
@@ -138,6 +139,66 @@ func TestPromptBuilder(t *testing.T) {
 			t.Error("English user prompt should contain decision requirements")
 		}
 	})
+}
+
+func TestFormatDataQualityForAI(t *testing.T) {
+	ctx := &Context{
+		CurrentTime:    "2026-07-15 09:30:00 UTC",
+		RuntimeMinutes: 12,
+		CallCount:      3,
+		Account: AccountInfo{
+			TotalEquity:      100,
+			AvailableBalance: 80,
+		},
+		CandidateCoins: []CandidateCoin{
+			{Symbol: "BTCUSDT", Sources: []string{"binance_score"}},
+			{Symbol: "LOWUSDT", Sources: []string{"binance_oi_top"}},
+			{Symbol: "MISSUSDT", Sources: []string{"binance_score"}},
+		},
+		MarketDataMap: map[string]*market.Data{
+			"BTCUSDT": {
+				Symbol:       "BTCUSDT",
+				CurrentPrice: 120000,
+			},
+		},
+		DataQuality: &DataQualitySummary{
+			CandidateCount:  3,
+			AnalyzableCount: 1,
+			LiquidityFiltered: []LiquidityFilterIssue{
+				{
+					Symbol:            "LOWUSDT",
+					OIValueMillions:   6.2,
+					ThresholdMillions: 15,
+				},
+			},
+			MarketDataFailures: []MarketDataFailure{
+				{
+					Symbol: "MISSUSDT",
+					Reason: "primary timeframe 5m K-line data is empty",
+				},
+			},
+		},
+	}
+
+	zh := FormatContextDataOnly(ctx, LangChinese)
+	for _, want := range []string{"本轮数据质量", "原始候选币: 3", "可分析币种: 1", "LOWUSDT OI 6.20M < 15.0M", "MISSUSDT"} {
+		if !strings.Contains(zh, want) {
+			t.Fatalf("Chinese formatted context should contain %q:\n%s", want, zh)
+		}
+	}
+	if strings.Contains(zh, "### 2. LOWUSDT") || strings.Contains(zh, "### 3. MISSUSDT") {
+		t.Fatalf("Chinese formatted context should not list non-analyzable candidates:\n%s", zh)
+	}
+
+	en := FormatContextDataOnly(ctx, LangEnglish)
+	for _, want := range []string{"Data Quality This Round", "Raw candidates: 3", "Analyzable symbols: 1", "LOWUSDT OI 6.20M < 15.0M", "MISSUSDT"} {
+		if !strings.Contains(en, want) {
+			t.Fatalf("English formatted context should contain %q:\n%s", want, en)
+		}
+	}
+	if strings.Contains(en, "### 2. LOWUSDT") || strings.Contains(en, "### 3. MISSUSDT") {
+		t.Fatalf("English formatted context should not list non-analyzable candidates:\n%s", en)
+	}
 }
 
 // TestValidateDecisionFormat 测试决策格式验证

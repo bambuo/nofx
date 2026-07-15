@@ -8,6 +8,7 @@ import (
 	"nofx/logger"
 	"nofx/market"
 	"nofx/mcp"
+	"nofx/provider/binance"
 	"nofx/provider/nofxos"
 	"nofx/security"
 	"nofx/store"
@@ -31,6 +32,16 @@ var (
 	// XML tag extraction (supports any characters in reasoning chain)
 	reReasoningTag = regexp.MustCompile(`(?s)<reasoning>(.*?)</reasoning>`)
 	reDecisionTag  = regexp.MustCompile(`(?s)<decision>(.*?)</decision>`)
+)
+
+const (
+	decisionRequestTemperature = 0.2
+	decisionRequestTopP        = 0.2
+	decisionRequestMaxTokens   = 1800
+	defaultMinRiskRewardRatio  = 3.0
+	coinProviderNofxOS         = "nofxos"
+	coinProviderBinance        = "binance"
+	marketDataQuarantineTTL    = 15 * time.Minute
 )
 
 // ============================================================================
@@ -68,12 +79,33 @@ type AccountInfo struct {
 // CandidateCoin candidate coin (from coin pool)
 type CandidateCoin struct {
 	Symbol  string   `json:"symbol"`
-	Sources []string `json:"sources"` // Sources: "ai500" and/or "oi_top"
+	Sources []string `json:"sources"` // Sources: "ai500", "oi_top", "binance_score", etc.
 }
 
-// OITopData open interest growth top data (for AI decision reference)
+// DataQualitySummary describes which symbols were actually analyzable this round.
+type DataQualitySummary struct {
+	CandidateCount     int                    `json:"candidate_count"`
+	AnalyzableCount    int                    `json:"analyzable_count"`
+	MarketDataFailures []MarketDataFailure    `json:"market_data_failures,omitempty"`
+	LiquidityFiltered  []LiquidityFilterIssue `json:"liquidity_filtered,omitempty"`
+}
+
+// MarketDataFailure records symbols that could not be analyzed due to missing market data.
+type MarketDataFailure struct {
+	Symbol string `json:"symbol"`
+	Reason string `json:"reason"`
+}
+
+// LiquidityFilterIssue records symbols excluded by the OI liquidity gate.
+type LiquidityFilterIssue struct {
+	Symbol            string  `json:"symbol"`
+	OIValueMillions   float64 `json:"oi_value_millions"`
+	ThresholdMillions float64 `json:"threshold_millions"`
+}
+
+// OITopData open interest increase data (for AI decision reference)
 type OITopData struct {
-	Rank              int     // OI Top ranking
+	Rank              int     // OI increase ranking
 	OIDeltaPercent    float64 // Open interest change percentage (1 hour)
 	OIDeltaValue      float64 // Open interest change value
 	PriceDeltaPercent float64 // Price change percentage
@@ -106,25 +138,26 @@ type RecentOrder struct {
 
 // Context trading context (complete information passed to AI)
 type Context struct {
-	CurrentTime     string                             `json:"current_time"`
-	RuntimeMinutes  int                                `json:"runtime_minutes"`
-	CallCount       int                                `json:"call_count"`
-	Account         AccountInfo                        `json:"account"`
-	Positions       []PositionInfo                     `json:"positions"`
-	CandidateCoins  []CandidateCoin                    `json:"candidate_coins"`
-	PromptVariant   string                             `json:"prompt_variant,omitempty"`
-	TradingStats    *TradingStats                      `json:"trading_stats,omitempty"`
-	RecentOrders    []RecentOrder                      `json:"recent_orders,omitempty"`
-	MarketDataMap   map[string]*market.Data            `json:"-"`
-	MultiTFMarket   map[string]map[string]*market.Data `json:"-"`
-	OITopDataMap    map[string]*OITopData              `json:"-"`
-	QuantDataMap    map[string]*QuantData              `json:"-"`
-	OIRankingData      *nofxos.OIRankingData      `json:"-"` // Market-wide OI ranking data
-	NetFlowRankingData *nofxos.NetFlowRankingData `json:"-"` // Market-wide fund flow ranking data
-	PriceRankingData   *nofxos.PriceRankingData   `json:"-"` // Market-wide price gainers/losers
-	BTCETHLeverage     int                          `json:"-"`
-	AltcoinLeverage int                                `json:"-"`
-	Timeframes      []string                           `json:"-"`
+	CurrentTime        string                             `json:"current_time"`
+	RuntimeMinutes     int                                `json:"runtime_minutes"`
+	CallCount          int                                `json:"call_count"`
+	Account            AccountInfo                        `json:"account"`
+	Positions          []PositionInfo                     `json:"positions"`
+	CandidateCoins     []CandidateCoin                    `json:"candidate_coins"`
+	PromptVariant      string                             `json:"prompt_variant,omitempty"`
+	TradingStats       *TradingStats                      `json:"trading_stats,omitempty"`
+	RecentOrders       []RecentOrder                      `json:"recent_orders,omitempty"`
+	DataQuality        *DataQualitySummary                `json:"data_quality,omitempty"`
+	MarketDataMap      map[string]*market.Data            `json:"-"`
+	MultiTFMarket      map[string]map[string]*market.Data `json:"-"`
+	OITopDataMap       map[string]*OITopData              `json:"-"`
+	QuantDataMap       map[string]*QuantData              `json:"-"`
+	OIRankingData      *nofxos.OIRankingData              `json:"-"` // Market-wide OI ranking data
+	NetFlowRankingData *nofxos.NetFlowRankingData         `json:"-"` // Market-wide fund flow ranking data
+	PriceRankingData   *nofxos.PriceRankingData           `json:"-"` // Market-wide price gainers/losers
+	BTCETHLeverage     int                                `json:"-"`
+	AltcoinLeverage    int                                `json:"-"`
+	Timeframes         []string                           `json:"-"`
 }
 
 // Decision AI trading decision
@@ -198,8 +231,10 @@ type OIDeltaData struct {
 
 // StrategyEngine strategy execution engine
 type StrategyEngine struct {
-	config       *store.StrategyConfig
-	nofxosClient *nofxos.Client
+	config             *store.StrategyConfig
+	nofxosClient       *nofxos.Client
+	binanceFutures     *binance.FuturesClient
+	quarantinedSymbols map[string]time.Time
 }
 
 // NewStrategyEngine creates strategy execution engine
@@ -212,8 +247,10 @@ func NewStrategyEngine(config *store.StrategyConfig) *StrategyEngine {
 	client := nofxos.NewClient(nofxos.DefaultBaseURL, apiKey)
 
 	return &StrategyEngine{
-		config:       config,
-		nofxosClient: client,
+		config:             config,
+		nofxosClient:       client,
+		binanceFutures:     binance.NewFuturesClient(binance.DefaultFuturesBaseURL),
+		quarantinedSymbols: make(map[string]time.Time),
 	}
 }
 
@@ -294,7 +331,11 @@ func GetFullDecisionWithStrategy(ctx *Context, mcpClient mcp.AIClient, engine *S
 
 	// 4. Call AI API
 	aiCallStart := time.Now()
-	aiResponse, err := mcpClient.CallWithMessages(systemPrompt, userPrompt)
+	aiRequest, err := buildDecisionRequest(systemPrompt, userPrompt)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build AI request: %w", err)
+	}
+	aiResponse, err := mcpClient.CallWithRequest(aiRequest)
 	aiCallDuration := time.Since(aiCallStart)
 	if err != nil {
 		return nil, fmt.Errorf("AI API call failed: %w", err)
@@ -308,6 +349,7 @@ func GetFullDecisionWithStrategy(ctx *Context, mcpClient mcp.AIClient, engine *S
 		riskConfig.AltcoinMaxLeverage,
 		riskConfig.BTCETHMaxPositionValueRatio,
 		riskConfig.AltcoinMaxPositionValueRatio,
+		riskConfig.MinRiskRewardRatio,
 	)
 
 	if decision != nil {
@@ -325,6 +367,16 @@ func GetFullDecisionWithStrategy(ctx *Context, mcpClient mcp.AIClient, engine *S
 	return decision, nil
 }
 
+func buildDecisionRequest(systemPrompt, userPrompt string) (*mcp.Request, error) {
+	return mcp.NewRequestBuilder().
+		WithSystemPrompt(systemPrompt).
+		WithUserPrompt(userPrompt).
+		WithTemperature(decisionRequestTemperature).
+		WithTopP(decisionRequestTopP).
+		WithMaxTokens(decisionRequestMaxTokens).
+		Build()
+}
+
 // ============================================================================
 // Market Data Fetching
 // ============================================================================
@@ -333,6 +385,9 @@ func GetFullDecisionWithStrategy(ctx *Context, mcpClient mcp.AIClient, engine *S
 func fetchMarketDataWithStrategy(ctx *Context, engine *StrategyEngine) error {
 	config := engine.GetConfig()
 	ctx.MarketDataMap = make(map[string]*market.Data)
+	ctx.DataQuality = &DataQualitySummary{
+		CandidateCount: len(ctx.CandidateCoins),
+	}
 
 	timeframes := config.Indicators.Klines.SelectedTimeframes
 	primaryTimeframe := config.Indicators.Klines.PrimaryTimeframe
@@ -363,6 +418,10 @@ func fetchMarketDataWithStrategy(ctx *Context, engine *StrategyEngine) error {
 		data, err := market.GetWithTimeframes(pos.Symbol, timeframes, primaryTimeframe, klineCount)
 		if err != nil {
 			logger.Infof("⚠️  Failed to fetch market data for position %s: %v", pos.Symbol, err)
+			ctx.DataQuality.MarketDataFailures = append(ctx.DataQuality.MarketDataFailures, MarketDataFailure{
+				Symbol: pos.Symbol,
+				Reason: err.Error(),
+			})
 			continue
 		}
 		ctx.MarketDataMap[pos.Symbol] = data
@@ -381,9 +440,26 @@ func fetchMarketDataWithStrategy(ctx *Context, engine *StrategyEngine) error {
 			continue
 		}
 
+		if engine.isSymbolQuarantined(coin.Symbol) {
+			reason := fmt.Sprintf("temporarily quarantined after recent market data failure (%s)", marketDataQuarantineTTL)
+			logger.Infof("⏳ %s %s, skipping coin", coin.Symbol, reason)
+			ctx.DataQuality.MarketDataFailures = append(ctx.DataQuality.MarketDataFailures, MarketDataFailure{
+				Symbol: coin.Symbol,
+				Reason: reason,
+			})
+			continue
+		}
+
 		data, err := market.GetWithTimeframes(coin.Symbol, timeframes, primaryTimeframe, klineCount)
 		if err != nil {
 			logger.Infof("⚠️  Failed to fetch market data for %s: %v", coin.Symbol, err)
+			if shouldQuarantineMarketDataError(err) {
+				engine.quarantineSymbol(coin.Symbol)
+			}
+			ctx.DataQuality.MarketDataFailures = append(ctx.DataQuality.MarketDataFailures, MarketDataFailure{
+				Symbol: coin.Symbol,
+				Reason: err.Error(),
+			})
 			continue
 		}
 
@@ -396,6 +472,11 @@ func fetchMarketDataWithStrategy(ctx *Context, engine *StrategyEngine) error {
 			if oiValueInMillions < minOIThresholdMillions {
 				logger.Infof("⚠️  %s OI value too low (%.2fM USD < %.1fM), skipping coin",
 					coin.Symbol, oiValueInMillions, minOIThresholdMillions)
+				ctx.DataQuality.LiquidityFiltered = append(ctx.DataQuality.LiquidityFiltered, LiquidityFilterIssue{
+					Symbol:            coin.Symbol,
+					OIValueMillions:   oiValueInMillions,
+					ThresholdMillions: minOIThresholdMillions,
+				})
 				continue
 			}
 		}
@@ -403,8 +484,42 @@ func fetchMarketDataWithStrategy(ctx *Context, engine *StrategyEngine) error {
 		ctx.MarketDataMap[coin.Symbol] = data
 	}
 
+	ctx.DataQuality.AnalyzableCount = len(ctx.MarketDataMap)
 	logger.Infof("📊 Successfully fetched multi-timeframe market data for %d coins", len(ctx.MarketDataMap))
 	return nil
+}
+
+func (e *StrategyEngine) isSymbolQuarantined(symbol string) bool {
+	if len(e.quarantinedSymbols) == 0 {
+		return false
+	}
+
+	until, ok := e.quarantinedSymbols[symbol]
+	if !ok {
+		return false
+	}
+	if time.Now().Before(until) {
+		return true
+	}
+	delete(e.quarantinedSymbols, symbol)
+	return false
+}
+
+func (e *StrategyEngine) quarantineSymbol(symbol string) {
+	if e.quarantinedSymbols == nil {
+		e.quarantinedSymbols = make(map[string]time.Time)
+	}
+	e.quarantinedSymbols[symbol] = time.Now().Add(marketDataQuarantineTTL)
+}
+
+func shouldQuarantineMarketDataError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "stale") ||
+		strings.Contains(msg, "k-line data is empty") ||
+		strings.Contains(msg, "fallback returned empty")
 }
 
 // ============================================================================
@@ -471,7 +586,7 @@ func (e *StrategyEngine) GetCandidateCoins() ([]CandidateCoin, error) {
 		return e.filterExcludedCoins(coins), nil
 
 	case "oi_low":
-		// 持仓减少榜，适合做空
+		// 持仓减少，适合做空
 		if !coinSource.UseOILow {
 			logger.Infof("⚠️  source_type is 'oi_low' but use_oi_low is false, falling back to static coins")
 			for _, symbol := range coinSource.StaticCoins {
@@ -494,10 +609,10 @@ func (e *StrategyEngine) GetCandidateCoins() ([]CandidateCoin, error) {
 		if coinSource.UseAI500 {
 			poolCoins, err := e.getAI500Coins(coinSource.AI500Limit)
 			if err != nil {
-				logger.Infof("⚠️  Failed to get AI500 coins: %v", err)
+				logger.Infof("⚠️  Failed to get score top coins: %v", err)
 			} else {
 				for _, coin := range poolCoins {
-					symbolSources[coin.Symbol] = append(symbolSources[coin.Symbol], "ai500")
+					symbolSources[coin.Symbol] = append(symbolSources[coin.Symbol], coin.Sources...)
 				}
 			}
 		}
@@ -505,10 +620,10 @@ func (e *StrategyEngine) GetCandidateCoins() ([]CandidateCoin, error) {
 		if coinSource.UseOITop {
 			oiCoins, err := e.getOITopCoins(coinSource.OITopLimit)
 			if err != nil {
-				logger.Infof("⚠️  Failed to get OI Top: %v", err)
+				logger.Infof("⚠️  Failed to get OI increase coins: %v", err)
 			} else {
 				for _, coin := range oiCoins {
-					symbolSources[coin.Symbol] = append(symbolSources[coin.Symbol], "oi_top")
+					symbolSources[coin.Symbol] = append(symbolSources[coin.Symbol], coin.Sources...)
 				}
 			}
 		}
@@ -516,10 +631,10 @@ func (e *StrategyEngine) GetCandidateCoins() ([]CandidateCoin, error) {
 		if coinSource.UseOILow {
 			oiLowCoins, err := e.getOILowCoins(coinSource.OILowLimit)
 			if err != nil {
-				logger.Infof("⚠️  Failed to get OI Low: %v", err)
+				logger.Infof("⚠️  Failed to get OI decrease coins: %v", err)
 			} else {
 				for _, coin := range oiLowCoins {
-					symbolSources[coin.Symbol] = append(symbolSources[coin.Symbol], "oi_low")
+					symbolSources[coin.Symbol] = append(symbolSources[coin.Symbol], coin.Sources...)
 				}
 			}
 		}
@@ -577,19 +692,7 @@ func (e *StrategyEngine) getAI500Coins(limit int) ([]CandidateCoin, error) {
 		limit = 30
 	}
 
-	symbols, err := e.nofxosClient.GetTopRatedCoins(limit)
-	if err != nil {
-		return nil, err
-	}
-
-	var candidates []CandidateCoin
-	for _, symbol := range symbols {
-		candidates = append(candidates, CandidateCoin{
-			Symbol:  symbol,
-			Sources: []string{"ai500"},
-		})
-	}
-	return candidates, nil
+	return e.getScoreCoinsFromProviders(limit)
 }
 
 func (e *StrategyEngine) getOITopCoins(limit int) ([]CandidateCoin, error) {
@@ -597,23 +700,7 @@ func (e *StrategyEngine) getOITopCoins(limit int) ([]CandidateCoin, error) {
 		limit = 10
 	}
 
-	positions, err := e.nofxosClient.GetOITopPositions()
-	if err != nil {
-		return nil, err
-	}
-
-	var candidates []CandidateCoin
-	for i, pos := range positions {
-		if i >= limit {
-			break
-		}
-		symbol := market.Normalize(pos.Symbol)
-		candidates = append(candidates, CandidateCoin{
-			Symbol:  symbol,
-			Sources: []string{"oi_top"},
-		})
-	}
-	return candidates, nil
+	return e.getOIIncreaseCoinsFromProviders(limit)
 }
 
 func (e *StrategyEngine) getOILowCoins(limit int) ([]CandidateCoin, error) {
@@ -621,11 +708,118 @@ func (e *StrategyEngine) getOILowCoins(limit int) ([]CandidateCoin, error) {
 		limit = 10
 	}
 
-	positions, err := e.nofxosClient.GetOILowPositions()
-	if err != nil {
-		return nil, err
-	}
+	return e.getOIDecreaseCoinsFromProviders(limit)
+}
 
+func (e *StrategyEngine) getScoreCoinsFromProviders(limit int) ([]CandidateCoin, error) {
+	var lastErr error
+	for _, provider := range e.coinSourceProviders() {
+		switch provider {
+		case coinProviderNofxOS:
+			symbols, err := e.nofxosClient.GetTopRatedCoins(limit)
+			if err != nil {
+				lastErr = err
+				logger.Infof("⚠️  NofxOS score top source unavailable: %v", err)
+				continue
+			}
+			if len(symbols) == 0 {
+				logger.Infof("ℹ️  NofxOS score top source returned empty list")
+				continue
+			}
+			return candidateCoinsFromSymbols(symbols, "ai500"), nil
+		case coinProviderBinance:
+			coins, err := e.getBinanceScoreCoins(limit)
+			if err != nil {
+				lastErr = err
+				logger.Infof("⚠️  Binance score source unavailable: %v", err)
+				continue
+			}
+			if len(coins) == 0 {
+				logger.Infof("ℹ️  Binance score source returned empty list")
+				continue
+			}
+			return coins, nil
+		}
+	}
+	if lastErr != nil {
+		return nil, lastErr
+	}
+	return []CandidateCoin{}, nil
+}
+
+func (e *StrategyEngine) getOIIncreaseCoinsFromProviders(limit int) ([]CandidateCoin, error) {
+	var lastErr error
+	for _, provider := range e.coinSourceProviders() {
+		switch provider {
+		case coinProviderNofxOS:
+			positions, err := e.nofxosClient.GetOITopPositions()
+			if err != nil {
+				lastErr = err
+				logger.Infof("⚠️  NofxOS OI top source unavailable: %v", err)
+				continue
+			}
+			if len(positions) == 0 {
+				logger.Infof("ℹ️  NofxOS OI top source returned empty list")
+				continue
+			}
+			return candidateCoinsFromOIPositions(positions, limit, "oi_top"), nil
+		case coinProviderBinance:
+			coins, err := e.getBinanceOITopCoins(limit)
+			if err != nil {
+				lastErr = err
+				logger.Infof("⚠️  Binance OI increase source unavailable: %v", err)
+				continue
+			}
+			if len(coins) == 0 {
+				logger.Infof("ℹ️  Binance OI increase source returned empty list")
+				continue
+			}
+			return coins, nil
+		}
+	}
+	if lastErr != nil {
+		return nil, lastErr
+	}
+	return []CandidateCoin{}, nil
+}
+
+func (e *StrategyEngine) getOIDecreaseCoinsFromProviders(limit int) ([]CandidateCoin, error) {
+	var lastErr error
+	for _, provider := range e.coinSourceProviders() {
+		switch provider {
+		case coinProviderNofxOS:
+			positions, err := e.nofxosClient.GetOILowPositions()
+			if err != nil {
+				lastErr = err
+				logger.Infof("⚠️  NofxOS OI low source unavailable: %v", err)
+				continue
+			}
+			if len(positions) == 0 {
+				logger.Infof("ℹ️  NofxOS OI low source returned empty list")
+				continue
+			}
+			return candidateCoinsFromOIPositions(positions, limit, "oi_low"), nil
+		case coinProviderBinance:
+			coins, err := e.getBinanceOILowCoins(limit)
+			if err != nil {
+				lastErr = err
+				logger.Infof("⚠️  Binance OI decrease source unavailable: %v", err)
+				continue
+			}
+			if len(coins) == 0 {
+				logger.Infof("ℹ️  Binance OI decrease source returned empty list")
+				continue
+			}
+			return coins, nil
+		}
+	}
+	if lastErr != nil {
+		return nil, lastErr
+	}
+	return []CandidateCoin{}, nil
+}
+
+func candidateCoinsFromOIPositions(positions []nofxos.OIPosition, limit int, source string) []CandidateCoin {
 	var candidates []CandidateCoin
 	for i, pos := range positions {
 		if i >= limit {
@@ -634,10 +828,84 @@ func (e *StrategyEngine) getOILowCoins(limit int) ([]CandidateCoin, error) {
 		symbol := market.Normalize(pos.Symbol)
 		candidates = append(candidates, CandidateCoin{
 			Symbol:  symbol,
-			Sources: []string{"oi_low"},
+			Sources: []string{source},
 		})
 	}
-	return candidates, nil
+	return candidates
+}
+
+func (e *StrategyEngine) coinSourceProviders() []string {
+	configured := e.config.CoinSource.Providers
+	if len(configured) == 0 {
+		configured = []string{coinProviderBinance}
+	}
+
+	providers := make([]string, 0, len(configured))
+	seen := make(map[string]bool, len(configured))
+	for _, provider := range configured {
+		provider = strings.ToLower(strings.TrimSpace(provider))
+		if seen[provider] {
+			continue
+		}
+		switch provider {
+		case coinProviderNofxOS:
+			if !e.hasCustomNofxOSAPIKey() {
+				logger.Infof("ℹ️  NofxOS coin provider skipped because no custom NofxOS API key is configured")
+				continue
+			}
+			seen[provider] = true
+			providers = append(providers, provider)
+		case coinProviderBinance:
+			seen[provider] = true
+			providers = append(providers, provider)
+		default:
+			logger.Infof("⚠️  Unknown coin source provider ignored: %s", provider)
+		}
+	}
+	if len(providers) == 0 {
+		return []string{coinProviderBinance}
+	}
+	return providers
+}
+
+func (e *StrategyEngine) hasCustomNofxOSAPIKey() bool {
+	apiKey := strings.TrimSpace(e.config.Indicators.NofxOSAPIKey)
+	return apiKey != "" && apiKey != nofxos.DefaultAuthKey
+}
+
+func (e *StrategyEngine) getBinanceScoreCoins(limit int) ([]CandidateCoin, error) {
+	symbols, err := e.binanceFutures.GetTopScoredSymbols(limit)
+	if err != nil {
+		return nil, err
+	}
+	return candidateCoinsFromSymbols(symbols, "binance_score"), nil
+}
+
+func (e *StrategyEngine) getBinanceOITopCoins(limit int) ([]CandidateCoin, error) {
+	symbols, err := e.binanceFutures.GetOIIncreasingSymbols(limit)
+	if err != nil {
+		return nil, err
+	}
+	return candidateCoinsFromSymbols(symbols, "binance_oi_top"), nil
+}
+
+func (e *StrategyEngine) getBinanceOILowCoins(limit int) ([]CandidateCoin, error) {
+	symbols, err := e.binanceFutures.GetOIDecreasingSymbols(limit)
+	if err != nil {
+		return nil, err
+	}
+	return candidateCoinsFromSymbols(symbols, "binance_oi_low"), nil
+}
+
+func candidateCoinsFromSymbols(symbols []string, source string) []CandidateCoin {
+	candidates := make([]CandidateCoin, 0, len(symbols))
+	for _, symbol := range symbols {
+		candidates = append(candidates, CandidateCoin{
+			Symbol:  market.Normalize(symbol),
+			Sources: []string{source},
+		})
+	}
+	return candidates
 }
 
 // ============================================================================
@@ -974,6 +1242,10 @@ func (e *StrategyEngine) BuildSystemPrompt(accountEquity float64, variant string
 	if altcoinPosValueRatio <= 0 {
 		altcoinPosValueRatio = 1.0
 	}
+	minRiskRewardRatio := riskControl.MinRiskRewardRatio
+	if minRiskRewardRatio <= 0 {
+		minRiskRewardRatio = defaultMinRiskRewardRatio
+	}
 
 	if lang == LangChinese {
 		sb.WriteString("# 硬约束（风险控制）\n\n")
@@ -989,7 +1261,7 @@ func (e *StrategyEngine) BuildSystemPrompt(accountEquity float64, variant string
 		sb.WriteString("## AI 建议（推荐遵守）：\n")
 		sb.WriteString(fmt.Sprintf("- 交易杠杆: 山寨币最大 %dx | BTC/ETH 最大 %dx\n",
 			riskControl.AltcoinMaxLeverage, riskControl.BTCETHMaxLeverage))
-		sb.WriteString(fmt.Sprintf("- 风险收益比: ≥1:%.1f (止盈 / 止损)\n", riskControl.MinRiskRewardRatio))
+		sb.WriteString(fmt.Sprintf("- 风险收益比: ≥1:%.1f (止盈 / 止损)\n", minRiskRewardRatio))
 		sb.WriteString(fmt.Sprintf("- 最小信心度: ≥%d 才能开仓\n\n", riskControl.MinConfidence))
 
 		sb.WriteString("## 仓位大小指引\n")
@@ -1014,7 +1286,7 @@ func (e *StrategyEngine) BuildSystemPrompt(accountEquity float64, variant string
 		sb.WriteString("## AI GUIDED (Recommended, you should follow):\n")
 		sb.WriteString(fmt.Sprintf("- Trading Leverage: Altcoins max %dx | BTC/ETH max %dx\n",
 			riskControl.AltcoinMaxLeverage, riskControl.BTCETHMaxLeverage))
-		sb.WriteString(fmt.Sprintf("- Risk-Reward Ratio: ≥1:%.1f (take_profit / stop_loss)\n", riskControl.MinRiskRewardRatio))
+		sb.WriteString(fmt.Sprintf("- Risk-Reward Ratio: ≥1:%.1f (take_profit / stop_loss)\n", minRiskRewardRatio))
 		sb.WriteString(fmt.Sprintf("- Min Confidence: ≥%d to open position\n\n", riskControl.MinConfidence))
 
 		// Position sizing guidance
@@ -1080,32 +1352,48 @@ func (e *StrategyEngine) BuildSystemPrompt(accountEquity float64, variant string
 		sb.WriteString("# 📋 决策流程\n\n")
 		sb.WriteString("1. 检查持仓 → 是否应该止盈/止损\n")
 		sb.WriteString("2. 扫描候选币种 + 多时间框架 → 是否有强信号\n")
-		sb.WriteString("3. 先写思考链，再输出结构化 JSON\n\n")
+		sb.WriteString("3. 输出简短、可审计的理由摘要，再输出结构化 JSON\n\n")
 	} else {
 		sb.WriteString("# 📋 Decision Process\n\n")
 		sb.WriteString("1. Check positions → Should we take profit/stop-loss\n")
 		sb.WriteString("2. Scan candidate coins + multi-timeframe → Are there strong signals\n")
-		sb.WriteString("3. Write chain of thought first, then output structured JSON\n\n")
+		sb.WriteString("3. Output a brief auditable rationale summary, then structured JSON\n\n")
 	}
 
-	// 7. Output format
+	// 7. Custom Prompt
+	if e.config.CustomPrompt != "" {
+		if lang == LangChinese {
+			sb.WriteString("# 📌 个性化交易策略\n\n")
+		} else {
+			sb.WriteString("# 📌 Personalized Trading Strategy\n\n")
+		}
+		sb.WriteString(e.config.CustomPrompt)
+		sb.WriteString("\n\n")
+		if lang == LangChinese {
+			sb.WriteString("注意：上述个性化策略是对基本规则的补充，不能违反后续最终硬约束和风险控制原则。\n\n")
+		} else {
+			sb.WriteString("Note: The personalized strategy above supplements the base rules and cannot override the final hard constraints or risk controls below.\n\n")
+		}
+	}
+
+	// 8. Output format
 	if lang == LangChinese {
 		sb.WriteString("# 输出格式（严格遵循）\n\n")
-		sb.WriteString("**必须使用 XML 标签 <reasoning> 和 <decision> 分隔思考链和决策 JSON，避免解析错误**\n\n")
+		sb.WriteString("**必须使用 XML 标签 <reasoning> 和 <decision> 分隔理由摘要和决策 JSON，避免解析错误**\n\n")
 		sb.WriteString("## 格式要求\n\n")
 		sb.WriteString("<reasoning>\n")
-		sb.WriteString("你的思考链分析...\n")
-		sb.WriteString("- 简要分析你的思考过程\n")
+		sb.WriteString("- 用 3-6 条短句概括关键证据、风险点和无效条件\n")
+		sb.WriteString("- 不要输出完整隐藏推理链，不要在此处放 JSON\n")
 		sb.WriteString("</reasoning>\n\n")
 		sb.WriteString("<decision>\n")
 		sb.WriteString("第二步：JSON 决策数组\n\n")
 	} else {
 		sb.WriteString("# Output Format (Strictly Follow)\n\n")
-		sb.WriteString("**Must use XML tags <reasoning> and <decision> to separate chain of thought and decision JSON, avoiding parsing errors**\n\n")
+		sb.WriteString("**Must use XML tags <reasoning> and <decision> to separate the rationale summary and decision JSON, avoiding parsing errors**\n\n")
 		sb.WriteString("## Format Requirements\n\n")
 		sb.WriteString("<reasoning>\n")
-		sb.WriteString("Your chain of thought analysis...\n")
-		sb.WriteString("- Briefly analyze your thinking process \n")
+		sb.WriteString("- Summarize key evidence, risks, and invalidation conditions in 3-6 short bullets\n")
+		sb.WriteString("- Do not output hidden chain-of-thought and do not place JSON here\n")
 		sb.WriteString("</reasoning>\n\n")
 		sb.WriteString("<decision>\n")
 		sb.WriteString("Step 2: JSON decision array\n\n")
@@ -1132,20 +1420,14 @@ func (e *StrategyEngine) BuildSystemPrompt(accountEquity float64, variant string
 		sb.WriteString("- **IMPORTANT**: All numeric values must be calculated numbers, NOT formulas/expressions (e.g., use `27.76` not `3000 * 0.01`)\n\n")
 	}
 
-	// 8. Custom Prompt
-	if e.config.CustomPrompt != "" {
-		if lang == LangChinese {
-			sb.WriteString("# 📌 个性化交易策略\n\n")
-		} else {
-			sb.WriteString("# 📌 Personalized Trading Strategy\n\n")
-		}
-		sb.WriteString(e.config.CustomPrompt)
-		sb.WriteString("\n\n")
-		if lang == LangChinese {
-			sb.WriteString("注意：上述个性化策略是对基本规则的补充，不能违反基本的风险控制原则。\n")
-		} else {
-			sb.WriteString("Note: The above personalized strategy is a supplement to the basic rules and cannot violate the basic risk control principles.\n")
-		}
+	if lang == LangChinese {
+		sb.WriteString("## 最终硬约束\n\n")
+		sb.WriteString("- 个性化策略、模式偏好和市场观点都不能覆盖风险控制、输出格式和后端校验规则。\n")
+		sb.WriteString(fmt.Sprintf("- 风险收益比必须 ≥1:%.1f，开仓信心度建议 ≥%d。\n", minRiskRewardRatio, riskControl.MinConfidence))
+	} else {
+		sb.WriteString("## Final Hard Constraints\n\n")
+		sb.WriteString("- Personalized strategy, mode preference, and market opinion cannot override risk controls, output format, or backend validation rules.\n")
+		sb.WriteString(fmt.Sprintf("- Risk-reward ratio must be ≥1:%.1f and opening confidence should be ≥%d.\n", minRiskRewardRatio, riskControl.MinConfidence))
 	}
 
 	return sb.String()
@@ -1212,7 +1494,7 @@ func (e *StrategyEngine) writeAvailableIndicators(sb *strings.Builder, lang Lang
 		}
 
 		if len(e.config.CoinSource.StaticCoins) > 0 || e.config.CoinSource.UseAI500 || e.config.CoinSource.UseOITop {
-			sb.WriteString("- AI500 / OI_Top 过滤标签（如有）\n")
+			sb.WriteString("- 综合评分榜 / OI 持仓增加过滤标签（如有）\n")
 		}
 
 		if indicators.EnableQuantData {
@@ -1275,7 +1557,7 @@ func (e *StrategyEngine) writeAvailableIndicators(sb *strings.Builder, lang Lang
 		}
 
 		if len(e.config.CoinSource.StaticCoins) > 0 || e.config.CoinSource.UseAI500 || e.config.CoinSource.UseOITop {
-			sb.WriteString("- AI500 / OI_Top filter tags (if available)\n")
+			sb.WriteString("- Score Top / OI Increase filter tags (if available)\n")
 		}
 
 		if indicators.EnableQuantData {
@@ -1578,43 +1860,48 @@ func (e *StrategyEngine) formatPositionInfo(index int, pos PositionInfo, ctx *Co
 
 func (e *StrategyEngine) formatCoinSourceTag(sources []string) string {
 	if len(sources) > 1 {
-		// 多信号源组合
-		hasAI500 := false
-		hasOITop := false
-		hasOILow := false
-		for _, s := range sources {
-			switch s {
-			case "ai500":
-				hasAI500 = true
-			case "oi_top":
-				hasOITop = true
-			case "oi_low":
-				hasOILow = true
+		labels := make([]string, 0, len(sources))
+		seen := make(map[string]bool, len(sources))
+		for _, source := range sources {
+			label := e.formatSingleCoinSource(source)
+			if label == "" || seen[label] {
+				continue
 			}
+			seen[label] = true
+			labels = append(labels, label)
 		}
-		if hasAI500 && hasOITop {
-			return " (AI500+OI_Top dual signal)"
+		if len(labels) == 0 {
+			return " (Multiple sources)"
 		}
-		if hasAI500 && hasOILow {
-			return " (AI500+OI_Low dual signal)"
-		}
-		if hasOITop && hasOILow {
-			return " (OI_Top+OI_Low)"
-		}
-		return " (Multiple sources)"
+		return " (" + strings.Join(labels, "+") + ")"
 	} else if len(sources) == 1 {
-		switch sources[0] {
-		case "ai500":
-			return " (AI500)"
-		case "oi_top":
-			return " (OI_Top 持仓增加)"
-		case "oi_low":
-			return " (OI_Low 持仓减少)"
-		case "static":
-			return " (Manual selection)"
+		label := e.formatSingleCoinSource(sources[0])
+		if label != "" {
+			return " (" + label + ")"
 		}
 	}
 	return ""
+}
+
+func (e *StrategyEngine) formatSingleCoinSource(source string) string {
+	switch source {
+	case "ai500":
+		return "Score Top"
+	case "oi_top":
+		return "OI Increase"
+	case "oi_low":
+		return "OI Decrease"
+	case "binance_score":
+		return "Binance Score"
+	case "binance_oi_top":
+		return "Binance OI Increase"
+	case "binance_oi_low":
+		return "Binance OI Decrease"
+	case "static":
+		return "Manual selection"
+	default:
+		return source
+	}
 }
 
 // ============================================================================
@@ -1903,7 +2190,7 @@ func formatFloatSlice(values []float64) string {
 // AI Response Parsing
 // ============================================================================
 
-func parseFullDecisionResponse(aiResponse string, accountEquity float64, btcEthLeverage, altcoinLeverage int, btcEthPosRatio, altcoinPosRatio float64) (*FullDecision, error) {
+func parseFullDecisionResponse(aiResponse string, accountEquity float64, btcEthLeverage, altcoinLeverage int, btcEthPosRatio, altcoinPosRatio, minRiskRewardRatio float64) (*FullDecision, error) {
 	cotTrace := extractCoTTrace(aiResponse)
 
 	decisions, err := extractDecisions(aiResponse)
@@ -1914,7 +2201,7 @@ func parseFullDecisionResponse(aiResponse string, accountEquity float64, btcEthL
 		}, fmt.Errorf("failed to extract decisions: %w", err)
 	}
 
-	if err := validateDecisions(decisions, accountEquity, btcEthLeverage, altcoinLeverage, btcEthPosRatio, altcoinPosRatio); err != nil {
+	if err := validateDecisions(decisions, accountEquity, btcEthLeverage, altcoinLeverage, btcEthPosRatio, altcoinPosRatio, minRiskRewardRatio); err != nil {
 		return &FullDecision{
 			CoTTrace:  cotTrace,
 			Decisions: decisions,
@@ -2080,16 +2367,20 @@ func compactArrayOpen(s string) string {
 // Decision Validation
 // ============================================================================
 
-func validateDecisions(decisions []Decision, accountEquity float64, btcEthLeverage, altcoinLeverage int, btcEthPosRatio, altcoinPosRatio float64) error {
+func validateDecisions(decisions []Decision, accountEquity float64, btcEthLeverage, altcoinLeverage int, btcEthPosRatio, altcoinPosRatio, minRiskRewardRatio float64) error {
 	for i := range decisions {
-		if err := validateDecision(&decisions[i], accountEquity, btcEthLeverage, altcoinLeverage, btcEthPosRatio, altcoinPosRatio); err != nil {
+		if err := validateDecision(&decisions[i], accountEquity, btcEthLeverage, altcoinLeverage, btcEthPosRatio, altcoinPosRatio, minRiskRewardRatio); err != nil {
 			return fmt.Errorf("decision #%d validation failed: %w", i+1, err)
 		}
 	}
 	return nil
 }
 
-func validateDecision(d *Decision, accountEquity float64, btcEthLeverage, altcoinLeverage int, btcEthPosRatio, altcoinPosRatio float64) error {
+func validateDecision(d *Decision, accountEquity float64, btcEthLeverage, altcoinLeverage int, btcEthPosRatio, altcoinPosRatio, minRiskRewardRatio float64) error {
+	if minRiskRewardRatio <= 0 {
+		minRiskRewardRatio = defaultMinRiskRewardRatio
+	}
+
 	validActions := map[string]bool{
 		"open_long":   true,
 		"open_short":  true,
@@ -2182,9 +2473,9 @@ func validateDecision(d *Decision, accountEquity float64, btcEthLeverage, altcoi
 			}
 		}
 
-		if riskRewardRatio < 3.0 {
-			return fmt.Errorf("risk/reward ratio too low (%.2f:1), must be ≥3.0:1 [risk: %.2f%% reward: %.2f%%] [stop loss: %.2f take profit: %.2f]",
-				riskRewardRatio, riskPercent, rewardPercent, d.StopLoss, d.TakeProfit)
+		if riskRewardRatio < minRiskRewardRatio {
+			return fmt.Errorf("risk/reward ratio too low (%.2f:1), must be ≥%.1f:1 [risk: %.2f%% reward: %.2f%%] [stop loss: %.2f take profit: %.2f]",
+				riskRewardRatio, minRiskRewardRatio, riskPercent, rewardPercent, d.StopLoss, d.TakeProfit)
 		}
 	}
 

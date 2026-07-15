@@ -45,6 +45,14 @@ func formatContextData(ctx *Context, lang Language) string {
 		sb.WriteString(formatHeaderEN(ctx))
 	}
 
+	if ctx.DataQuality != nil {
+		if lang == LangChinese {
+			sb.WriteString(formatDataQualityZH(ctx.DataQuality))
+		} else {
+			sb.WriteString(formatDataQualityEN(ctx.DataQuality))
+		}
+	}
+
 	// 3. 账户信息
 	if lang == LangChinese {
 		sb.WriteString(formatAccountZH(ctx))
@@ -127,6 +135,41 @@ func formatAccountZH(ctx *Context) string {
 		sb.WriteString("⚠️ **风险提示**: 保证金使用率 > 50%，建议谨慎开仓\n\n")
 	}
 
+	return sb.String()
+}
+
+// formatDataQualityZH 格式化本轮数据质量摘要（中文）
+func formatDataQualityZH(summary *DataQualitySummary) string {
+	var sb strings.Builder
+	sb.WriteString("## 本轮数据质量\n\n")
+	sb.WriteString(fmt.Sprintf("- 原始候选币: %d 个\n", summary.CandidateCount))
+	sb.WriteString(fmt.Sprintf("- 可分析币种: %d 个\n", summary.AnalyzableCount))
+	sb.WriteString(fmt.Sprintf("- 市场数据失败: %d 个\n", len(summary.MarketDataFailures)))
+	sb.WriteString(fmt.Sprintf("- 低流动性过滤: %d 个\n", len(summary.LiquidityFiltered)))
+
+	if len(summary.LiquidityFiltered) > 0 {
+		sb.WriteString("- 低流动性过滤明细: ")
+		for i, item := range summary.LiquidityFiltered {
+			if i > 0 {
+				sb.WriteString("; ")
+			}
+			sb.WriteString(fmt.Sprintf("%s OI %.2fM < %.1fM", item.Symbol, item.OIValueMillions, item.ThresholdMillions))
+		}
+		sb.WriteString("\n")
+	}
+
+	if len(summary.MarketDataFailures) > 0 {
+		sb.WriteString("- 市场数据失败明细: ")
+		for i, item := range summary.MarketDataFailures {
+			if i > 0 {
+				sb.WriteString("; ")
+			}
+			sb.WriteString(fmt.Sprintf("%s: %s", item.Symbol, item.Reason))
+		}
+		sb.WriteString("\n")
+	}
+
+	sb.WriteString("\n")
 	return sb.String()
 }
 
@@ -270,19 +313,25 @@ func formatCandidateCoinsZH(ctx *Context) string {
 	var sb strings.Builder
 	sb.WriteString("## 候选币种\n\n")
 
-	for i, coin := range ctx.CandidateCoins {
-		sb.WriteString(fmt.Sprintf("### %d. %s\n\n", i+1, coin.Symbol))
+	displayed := 0
+	for _, coin := range ctx.CandidateCoins {
+		mdata, ok := ctx.MarketDataMap[coin.Symbol]
+		if !ok || mdata == nil {
+			continue
+		}
+
+		displayed++
+		sb.WriteString(fmt.Sprintf("### %d. %s\n\n", displayed, coin.Symbol))
+		if len(coin.Sources) > 0 {
+			sb.WriteString(fmt.Sprintf("来源: %s\n", strings.Join(coin.Sources, ", ")))
+		}
 
 		// 当前价格
-		if ctx.MarketDataMap != nil {
-			if mdata, ok := ctx.MarketDataMap[coin.Symbol]; ok {
-				sb.WriteString(fmt.Sprintf("当前价格: %.4f\n\n", mdata.CurrentPrice))
+		sb.WriteString(fmt.Sprintf("当前价格: %.4f\n\n", mdata.CurrentPrice))
 
-				// K线数据（多时间框架）
-				if mdata.TimeframeData != nil {
-					sb.WriteString(formatKlineDataZH(coin.Symbol, mdata.TimeframeData, ctx.Timeframes))
-				}
-			}
+		// K线数据（多时间框架）
+		if mdata.TimeframeData != nil {
+			sb.WriteString(formatKlineDataZH(coin.Symbol, mdata.TimeframeData, ctx.Timeframes))
 		}
 
 		// OI数据（如果有）
@@ -309,6 +358,10 @@ func formatCandidateCoinsZH(ctx *Context) string {
 				sb.WriteString(fmt.Sprintf("**市场解读**: %s\n\n", interpretation))
 			}
 		}
+	}
+
+	if displayed == 0 {
+		sb.WriteString("本轮没有候选币获得完整市场数据。\n\n")
 	}
 
 	return sb.String()
@@ -355,7 +408,6 @@ func formatKlineDataZH(symbol string, tfData map[string]*market.TimeframeSeriesD
 	return sb.String()
 }
 
-
 // getOIInterpretationZH 获取OI变化解读（中文）
 func getOIInterpretationZH(oiChange, priceChange string) string {
 	if oiChange == "增加" && priceChange == "上涨" {
@@ -396,6 +448,41 @@ func formatAccountEN(ctx *Context) string {
 		sb.WriteString("⚠️ **Risk Notice**: Margin usage > 50%, be cautious with new positions\n\n")
 	}
 
+	return sb.String()
+}
+
+// formatDataQualityEN formats the current round's data quality summary.
+func formatDataQualityEN(summary *DataQualitySummary) string {
+	var sb strings.Builder
+	sb.WriteString("## Data Quality This Round\n\n")
+	sb.WriteString(fmt.Sprintf("- Raw candidates: %d\n", summary.CandidateCount))
+	sb.WriteString(fmt.Sprintf("- Analyzable symbols: %d\n", summary.AnalyzableCount))
+	sb.WriteString(fmt.Sprintf("- Market data failures: %d\n", len(summary.MarketDataFailures)))
+	sb.WriteString(fmt.Sprintf("- Low-liquidity filtered: %d\n", len(summary.LiquidityFiltered)))
+
+	if len(summary.LiquidityFiltered) > 0 {
+		sb.WriteString("- Low-liquidity details: ")
+		for i, item := range summary.LiquidityFiltered {
+			if i > 0 {
+				sb.WriteString("; ")
+			}
+			sb.WriteString(fmt.Sprintf("%s OI %.2fM < %.1fM", item.Symbol, item.OIValueMillions, item.ThresholdMillions))
+		}
+		sb.WriteString("\n")
+	}
+
+	if len(summary.MarketDataFailures) > 0 {
+		sb.WriteString("- Market data failure details: ")
+		for i, item := range summary.MarketDataFailures {
+			if i > 0 {
+				sb.WriteString("; ")
+			}
+			sb.WriteString(fmt.Sprintf("%s: %s", item.Symbol, item.Reason))
+		}
+		sb.WriteString("\n")
+	}
+
+	sb.WriteString("\n")
 	return sb.String()
 }
 
@@ -536,17 +623,23 @@ func formatCandidateCoinsEN(ctx *Context) string {
 	var sb strings.Builder
 	sb.WriteString("## Candidate Coins\n\n")
 
-	for i, coin := range ctx.CandidateCoins {
-		sb.WriteString(fmt.Sprintf("### %d. %s\n\n", i+1, coin.Symbol))
+	displayed := 0
+	for _, coin := range ctx.CandidateCoins {
+		mdata, ok := ctx.MarketDataMap[coin.Symbol]
+		if !ok || mdata == nil {
+			continue
+		}
 
-		if ctx.MarketDataMap != nil {
-			if mdata, ok := ctx.MarketDataMap[coin.Symbol]; ok {
-				sb.WriteString(fmt.Sprintf("Current Price: %.4f\n\n", mdata.CurrentPrice))
+		displayed++
+		sb.WriteString(fmt.Sprintf("### %d. %s\n\n", displayed, coin.Symbol))
+		if len(coin.Sources) > 0 {
+			sb.WriteString(fmt.Sprintf("Sources: %s\n", strings.Join(coin.Sources, ", ")))
+		}
 
-				if mdata.TimeframeData != nil {
-					sb.WriteString(formatKlineDataEN(coin.Symbol, mdata.TimeframeData, ctx.Timeframes))
-				}
-			}
+		sb.WriteString(fmt.Sprintf("Current Price: %.4f\n\n", mdata.CurrentPrice))
+
+		if mdata.TimeframeData != nil {
+			sb.WriteString(formatKlineDataEN(coin.Symbol, mdata.TimeframeData, ctx.Timeframes))
 		}
 
 		if ctx.OITopDataMap != nil {
@@ -571,6 +664,10 @@ func formatCandidateCoinsEN(ctx *Context) string {
 				sb.WriteString(fmt.Sprintf("**Market Interpretation**: %s\n\n", interpretation))
 			}
 		}
+	}
+
+	if displayed == 0 {
+		sb.WriteString("No candidate symbols have complete market data this round.\n\n")
 	}
 
 	return sb.String()
@@ -619,7 +716,6 @@ func formatKlineDataEN(symbol string, tfData map[string]*market.TimeframeSeriesD
 
 	return sb.String()
 }
-
 
 // getOIInterpretationEN 获取OI变化解读（英文）
 func getOIInterpretationEN(oiChange, priceChange string) string {

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 )
 
 const (
@@ -87,6 +88,63 @@ func (c *ClaudeClient) buildMCPRequestBody(systemPrompt, userPrompt string) map[
 		"messages": []map[string]string{
 			{"role": "user", "content": userPrompt},
 		},
+	}
+
+	return requestBody
+}
+
+// buildRequestBodyFromRequest converts the generic request builder shape into
+// Anthropic's Messages API shape.
+func (c *ClaudeClient) buildRequestBodyFromRequest(req *Request) map[string]any {
+	messages := make([]map[string]string, 0, len(req.Messages))
+	systemPrompts := make([]string, 0, 1)
+
+	for _, msg := range req.Messages {
+		switch msg.Role {
+		case "system":
+			if msg.Content != "" {
+				systemPrompts = append(systemPrompts, msg.Content)
+			}
+		case "assistant", "user":
+			messages = append(messages, map[string]string{
+				"role":    msg.Role,
+				"content": msg.Content,
+			})
+		default:
+			messages = append(messages, map[string]string{
+				"role":    "user",
+				"content": msg.Content,
+			})
+		}
+	}
+
+	requestBody := map[string]any{
+		"model":    req.Model,
+		"messages": messages,
+	}
+
+	if len(systemPrompts) > 0 {
+		requestBody["system"] = strings.Join(systemPrompts, "\n\n")
+	}
+
+	if req.MaxTokens != nil {
+		requestBody["max_tokens"] = *req.MaxTokens
+	} else {
+		requestBody["max_tokens"] = c.MaxTokens
+	}
+
+	if req.Temperature != nil {
+		requestBody["temperature"] = *req.Temperature
+	} else {
+		requestBody["temperature"] = c.config.Temperature
+	}
+
+	if req.TopP != nil {
+		requestBody["top_p"] = *req.TopP
+	}
+
+	if len(req.Stop) > 0 {
+		requestBody["stop_sequences"] = req.Stop
 	}
 
 	return requestBody

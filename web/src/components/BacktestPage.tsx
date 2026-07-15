@@ -872,15 +872,18 @@ export function BacktestPage() {
 
     switch (sourceType) {
       case 'ai500':
-        return { type: 'AI500', limit: cs.ai500_limit || 30 }
+        return { type: language === 'zh' ? '综合评分榜' : 'Score Top', limit: cs.ai500_limit || 30 }
       case 'oi_top':
-        return { type: 'OI Top', limit: cs.oi_top_limit || 30 }
+        return { type: language === 'zh' ? 'OI 持仓增加' : 'OI Increase', limit: cs.oi_top_limit || 30 }
+      case 'oi_low':
+        return { type: language === 'zh' ? 'OI 持仓减少' : 'OI Decrease', limit: cs.oi_low_limit || 30 }
       case 'mixed':
         const sources = []
-        if (cs.use_ai500) sources.push(`AI500(${cs.ai500_limit || 30})`)
-        if (cs.use_oi_top) sources.push(`OI Top(${cs.oi_top_limit || 30})`)
+        if (cs.use_ai500) sources.push(`${language === 'zh' ? '评分榜' : 'Score'}(${cs.ai500_limit || 30})`)
+        if (cs.use_oi_top) sources.push(`${language === 'zh' ? 'OI增' : 'OI Increase'}(${cs.oi_top_limit || 30})`)
+        if (cs.use_oi_low) sources.push(`${language === 'zh' ? 'OI减' : 'OI Decrease'}(${cs.oi_low_limit || 30})`)
         if (cs.static_coins?.length) sources.push(`Static(${cs.static_coins.length})`)
-        return { type: 'Mixed', desc: sources.join(' + ') }
+        return { type: language === 'zh' ? '混合' : 'Mixed', desc: sources.join(' + ') }
       case 'static':
         return { type: 'Static', coins: cs.static_coins || [] }
       default:

@@ -240,6 +240,7 @@ type MockClientHooks struct {
 	ParseResponseFunc      func([]byte) (string, error)
 	IsRetryableErrorFunc   func(error) bool
 	BuildRequestBodyFunc   func(string, string) map[string]any
+	BuildRequestFunc       func(*Request) map[string]any
 	MarshalRequestBodyFunc func(map[string]any) ([]byte, error)
 }
 
@@ -258,6 +259,26 @@ func (m *MockClientHooks) buildMCPRequestBody(systemPrompt, userPrompt string) m
 			{"role": "system", "content": systemPrompt},
 			{"role": "user", "content": userPrompt},
 		},
+	}
+}
+
+func (m *MockClientHooks) buildRequestBodyFromRequest(req *Request) map[string]any {
+	m.BuildRequestBodyCalled++
+	if m.BuildRequestFunc != nil {
+		return m.BuildRequestFunc(req)
+	}
+
+	messages := make([]map[string]string, 0, len(req.Messages))
+	for _, msg := range req.Messages {
+		messages = append(messages, map[string]string{
+			"role":    msg.Role,
+			"content": msg.Content,
+		})
+	}
+
+	return map[string]any{
+		"model":    req.Model,
+		"messages": messages,
 	}
 }
 

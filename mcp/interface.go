@@ -26,5 +26,6 @@ type clientHooks interface {
 	setAuthHeader(reqHeaders http.Header)
 	marshalRequestBody(requestBody map[string]any) ([]byte, error)
 	parseMCPResponse(body []byte) (string, error)
+	buildRequestBodyFromRequest(req *Request) map[string]any
 	isRetryableError(err error) bool
 }

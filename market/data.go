@@ -100,10 +100,10 @@ func getKlinesFromCoinAnk(symbol, interval, exchange string, limit int) ([]Kline
 			logger.Warnf("⚠️ CoinAnk %s data failed, falling back to Binance: %v", exchange, err)
 			coinankKlines, err = coinank_api.Kline(ctx, symbol, coinank_enum.Binance, ts, coinank_enum.To, limit, coinankInterval)
 			if err != nil {
-				return nil, fmt.Errorf("CoinAnk API error (fallback): %w", err)
+				return getKlinesFromBinanceFutures(symbol, interval, limit, fmt.Errorf("CoinAnk API error (fallback): %w", err))
 			}
 		} else {
-			return nil, fmt.Errorf("CoinAnk API error: %w", err)
+			return getKlinesFromBinanceFutures(symbol, interval, limit, fmt.Errorf("CoinAnk API error: %w", err))
 		}
 	}
 
@@ -121,6 +121,18 @@ func getKlinesFromCoinAnk(symbol, interval, exchange string, limit int) ([]Kline
 		}
 	}
 
+	return klines, nil
+}
+
+func getKlinesFromBinanceFutures(symbol, interval string, limit int, cause error) ([]Kline, error) {
+	klines, err := NewAPIClient().GetKlines(symbol, interval, limit)
+	if err != nil {
+		return nil, fmt.Errorf("%w; Binance futures fallback failed: %v", cause, err)
+	}
+	if len(klines) == 0 {
+		return nil, fmt.Errorf("%w; Binance futures fallback returned empty K-line data", cause)
+	}
+	logger.Infof("✅ %s %s K-line fallback to Binance Futures succeeded after CoinAnk failure", symbol, interval)
 	return klines, nil
 }
 
@@ -370,7 +382,7 @@ func GetWithTimeframes(symbol string, timeframes []string, primaryTimeframe stri
 	currentRSI7 := calculateRSI(primaryKlines, 7)
 
 	// Calculate price changes
-	priceChange1h := calculatePriceChangeByBars(primaryKlines, primaryTimeframe, 60) // 1 hour
+	priceChange1h := calculatePriceChangeByBars(primaryKlines, primaryTimeframe, 60)  // 1 hour
 	priceChange4h := calculatePriceChangeByBars(primaryKlines, primaryTimeframe, 240) // 4 hours
 
 	// Get OI data

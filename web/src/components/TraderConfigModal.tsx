@@ -336,9 +336,9 @@ export function TraderConfigModal({
                   <option value="">{t('noStrategyManual', language)}</option>
                   {strategies.map((strategy) => (
                     <option key={strategy.id} value={strategy.id}>
-                      {selectedStrategy.name}
-                      {selectedStrategy.is_active ? t('active', language) : ''}
-                      {selectedStrategy.is_default ? t('default', language) : ''}
+                      {strategy.name}
+                      {strategy.is_active ? t('activeStrategySuffix', language) : ''}
+                      {strategy.is_default ? t('defaultStrategySuffix', language) : ''}
                     </option>
                   ))}
                 </select>
@@ -368,8 +368,10 @@ export function TraderConfigModal({
                   <div className="grid grid-cols-2 gap-2 text-xs text-[#848E9C]">
                     <div>
                       {t('coinSource', language)}: {selectedStrategy.config.coin_source.source_type === 'static' ? '固定币种' :
-                        selectedStrategy.config.coin_source.source_type === 'ai500' ? 'AI500' :
-                        selectedStrategy.config.coin_source.source_type === 'oi_top' ? 'OI Top' : '混合'}
+                        selectedStrategy.config.coin_source.source_type === 'ai500' ? (language === 'zh' ? '综合评分榜' : 'Score Top') :
+                        selectedStrategy.config.coin_source.source_type === 'oi_top' ? (language === 'zh' ? 'OI 持仓增加' : 'OI Increase') :
+                        selectedStrategy.config.coin_source.source_type === 'oi_low' ? (language === 'zh' ? 'OI 持仓减少' : 'OI Decrease') :
+                        language === 'zh' ? '混合' : 'Mixed'}
                     </div>
                     <div>
                       {t('marginLimit', language)}: {((selectedStrategy.config.risk_control?.max_margin_usage || 0.9) * 100).toFixed(0)}%

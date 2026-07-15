@@ -121,21 +121,23 @@ type PromptSectionsConfig struct {
 
 // CoinSourceConfig coin source configuration
 type CoinSourceConfig struct {
-	// source type: "static" | "ai500" | "oi_top" | "oi_low" | "mixed"
+	// source type: "static" | "ai500" (score top, legacy key) | "oi_top" | "oi_low" | "mixed"
 	SourceType string `json:"source_type"`
+	// ordered provider list: "nofxos" | "binance"; empty means default provider chain
+	Providers []string `json:"providers,omitempty"`
 	// static coin list (used when source_type = "static")
 	StaticCoins []string `json:"static_coins,omitempty"`
 	// excluded coins list (filtered out from all sources)
 	ExcludedCoins []string `json:"excluded_coins,omitempty"`
-	// whether to use AI500 coin pool
+	// whether to use score top coin pool (legacy json key: use_ai500)
 	UseAI500 bool `json:"use_ai500"`
-	// AI500 coin pool maximum count
+	// score top coin pool maximum count
 	AI500Limit int `json:"ai500_limit,omitempty"`
-	// whether to use OI Top (持仓增加榜，适合做多)
+	// whether to use OI increase ranking (持仓增加，适合做多)
 	UseOITop bool `json:"use_oi_top"`
-	// OI Top maximum count
+	// OI increase maximum count
 	OITopLimit int `json:"oi_top_limit,omitempty"`
-	// whether to use OI Low (持仓减少榜，适合做空)
+	// whether to use OI decrease ranking (持仓减少，适合做空)
 	UseOILow bool `json:"use_oi_low"`
 	// OILow maximum count
 	OILowLimit int `json:"oi_low_limit,omitempty"`
@@ -152,7 +154,7 @@ type IndicatorConfig struct {
 	EnableMACD        bool `json:"enable_macd"`
 	EnableRSI         bool `json:"enable_rsi"`
 	EnableATR         bool `json:"enable_atr"`
-	EnableBOLL        bool `json:"enable_boll"`         // Bollinger Bands
+	EnableBOLL        bool `json:"enable_boll"` // Bollinger Bands
 	EnableVolume      bool `json:"enable_volume"`
 	EnableOI          bool `json:"enable_oi"`           // open interest
 	EnableFundingRate bool `json:"enable_funding_rate"` // funding rate
@@ -210,10 +212,10 @@ type KlineConfig struct {
 
 // ExternalDataSource external data source configuration
 type ExternalDataSource struct {
-	Name        string            `json:"name"`         // data source name
-	Type        string            `json:"type"`         // type: "api" | "webhook"
-	URL         string            `json:"url"`          // API URL
-	Method      string            `json:"method"`       // HTTP method
+	Name        string            `json:"name"`   // data source name
+	Type        string            `json:"type"`   // type: "api" | "webhook"
+	URL         string            `json:"url"`    // API URL
+	Method      string            `json:"method"` // HTTP method
 	Headers     map[string]string `json:"headers,omitempty"`
 	DataPath    string            `json:"data_path,omitempty"`    // JSON data path
 	RefreshSecs int               `json:"refresh_secs,omitempty"` // refresh interval (seconds)
@@ -270,6 +272,7 @@ func GetDefaultStrategyConfig(lang string) StrategyConfig {
 		Language: normalizedLang,
 		CoinSource: CoinSourceConfig{
 			SourceType: "ai500",
+			Providers:  []string{"binance"},
 			UseAI500:   true,
 			AI500Limit: 10,
 			UseOITop:   false,
@@ -319,15 +322,15 @@ func GetDefaultStrategyConfig(lang string) StrategyConfig {
 			PriceRankingLimit:    10,
 		},
 		RiskControl: RiskControlConfig{
-			MaxPositions:                    3,
-			BTCETHMaxLeverage:               5,
-			AltcoinMaxLeverage:              5,
-			BTCETHMaxPositionValueRatio:     5.0,
-			AltcoinMaxPositionValueRatio:    1.0,
-			MaxMarginUsage:                  0.9,
-			MinPositionSize:                 12,
-			MinRiskRewardRatio:              3.0,
-			MinConfidence:                   75,
+			MaxPositions:                 3,
+			BTCETHMaxLeverage:            5,
+			AltcoinMaxLeverage:           5,
+			BTCETHMaxPositionValueRatio:  5.0,
+			AltcoinMaxPositionValueRatio: 1.0,
+			MaxMarginUsage:               0.9,
+			MinPositionSize:              12,
+			MinRiskRewardRatio:           3.0,
+			MinConfidence:                75,
 		},
 	}
 
